@@ -77,6 +77,15 @@
   border-radius: 4px;
 }
 
+.sprint {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--accent-green, #4ade80);
+  background: rgba(74, 222, 128, 0.1);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
 .requester {
   font-size: 0.7rem;
   color: var(--text-muted);

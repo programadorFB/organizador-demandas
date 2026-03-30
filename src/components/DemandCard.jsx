@@ -52,6 +52,9 @@ export default function DemandCard({ demand, onDragStart, onClick }) {
           {demand.story_points && (
             <span className={styles.points}>{demand.story_points} pts</span>
           )}
+          {demand.sprint_name && (
+            <span className={styles.sprint}>{demand.sprint_name}</span>
+          )}
           {demand.requester_name && (
             <span className={styles.requester}>{demand.requester_name}</span>
           )}

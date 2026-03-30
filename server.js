@@ -150,10 +150,11 @@ app.get('/api/demands', authMiddleware, async (req, res) => {
   try {
     const { status, priority, category, sprint_id } = req.query;
     let query = `
-      SELECT d.*, u.name as requester_name, a.name as assigned_name
+      SELECT d.*, u.name as requester_name, a.name as assigned_name, sp.name as sprint_name
       FROM demands d
       JOIN users u ON d.requester_id = u.id
       LEFT JOIN users a ON d.assigned_to = a.id
+      LEFT JOIN sprints sp ON d.sprint_id = sp.id
       WHERE 1=1
     `;
     const params = [];

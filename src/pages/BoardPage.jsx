@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useDemands } from '../hooks/useDemands';
-import { demands as demandsApi, stats as statsApi } from '../services/api';
+import { demands as demandsApi, stats as statsApi, scrum as scrumApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import DemandCard from '../components/DemandCard';
 import DemandModal from '../components/DemandModal';
@@ -21,11 +21,16 @@ export default function BoardPage() {
   const [selectedDemand, setSelectedDemand] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
   const [boardStats, setBoardStats] = useState(null);
+  const [sprintsList, setSprintsList] = useState([]);
   const { isAdmin } = useAuth();
 
   useEffect(() => {
     statsApi.get().then(setBoardStats).catch(() => {});
   }, [grouped]);
+
+  useEffect(() => {
+    scrumApi.sprints().then(setSprintsList).catch(() => {});
+  }, []);
 
   const handleDragStart = (e, demand) => {
     e.dataTransfer.setData('demandId', demand.id);
@@ -93,6 +98,12 @@ export default function BoardPage() {
             <option value="melhoria">Melhoria</option>
             <option value="tarefa_tecnica">Tarefa Técnica</option>
             <option value="documentacao">Documentação</option>
+          </select>
+          <select onChange={handleFilterChange('sprint_id')} defaultValue="">
+            <option value="">Todas Sprints</option>
+            {sprintsList.map(s => (
+              <option key={s.id} value={s.id}>{s.name}{s.status === 'active' ? ' (Ativa)' : ''}</option>
+            ))}
           </select>
           <button onClick={reload} className="btn btn-ghost btn-sm">Atualizar</button>
         </div>

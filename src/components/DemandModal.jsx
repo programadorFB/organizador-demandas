@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { demands as demandsApi, comments as commentsApi, users as usersApi } from '../services/api';
+import { demands as demandsApi, comments as commentsApi, users as usersApi, scrum as scrumApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import styles from '../styles/DemandModal.module.css';
 
@@ -22,12 +22,17 @@ export default function DemandModal({ demand, onClose, onUpdate }) {
   const [commentsList, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [usersList, setUsersList] = useState([]);
+  const [sprintsList, setSprintsList] = useState([]);
+  const [selectedSprint, setSelectedSprint] = useState(demand.sprint_id || '');
   const [assignTo, setAssignTo] = useState(demand.assigned_to || '');
   const [urgentNote, setUrgentNote] = useState('');
 
   useEffect(() => {
     commentsApi.list(demand.id).then(setComments).catch(() => {});
-    if (canManage) usersApi.list().then(setUsersList).catch(() => {});
+    if (canManage) {
+      usersApi.list().then(setUsersList).catch(() => {});
+      scrumApi.sprints().then(setSprintsList).catch(() => {});
+    }
   }, [demand.id, canManage]);
 
   const addComment = async () => {
@@ -47,6 +52,11 @@ export default function DemandModal({ demand, onClose, onUpdate }) {
   const handleAssign = async () => {
     if (!assignTo) return;
     await demandsApi.update(demand.id, { ...demand, assigned_to: parseInt(assignTo) });
+    onUpdate();
+  };
+
+  const handleSprintChange = async () => {
+    await demandsApi.update(demand.id, { ...demand, sprint_id: selectedSprint ? parseInt(selectedSprint) : null });
     onUpdate();
   };
 
@@ -109,6 +119,10 @@ export default function DemandModal({ demand, onClose, onUpdate }) {
               <span className={styles.infoLabel}>Responsável</span>
               <span className={styles.infoValue}>{demand.assigned_name || 'Não atribuído'}</span>
             </div>
+            <div className={styles.infoItem}>
+              <span className={styles.infoLabel}>Sprint</span>
+              <span className={styles.infoValue}>{demand.sprint_name || 'Nenhuma'}</span>
+            </div>
           </div>
 
           <div className={styles.sectionBlock}>
@@ -169,6 +183,22 @@ export default function DemandModal({ demand, onClose, onUpdate }) {
                   ))}
                 </select>
                 <button className="btn btn-primary btn-sm" onClick={handleAssign}>Atribuir</button>
+              </div>
+            </div>
+          )}
+
+          {/* Sprint association (admin/supervisor) */}
+          {canManage && (
+            <div className={styles.sectionBlock}>
+              <h3>Associar à Sprint</h3>
+              <div className={styles.assignRow}>
+                <select value={selectedSprint} onChange={e => setSelectedSprint(e.target.value)}>
+                  <option value="">Sem sprint</option>
+                  {sprintsList.filter(s => s.status !== 'completed').map(s => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.status === 'active' ? 'Ativa' : 'Planejamento'})</option>
+                  ))}
+                </select>
+                <button className="btn btn-primary btn-sm" onClick={handleSprintChange}>Salvar</button>
               </div>
             </div>
           )}
