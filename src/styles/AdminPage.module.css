@@ -1,0 +1,198 @@
+.container {
+  min-height: calc(100vh - 56px);
+  padding: 2rem;
+  display: flex;
+  justify-content: center;
+  background: var(--bg-primary);
+}
+
+.wrapper {
+  width: 100%;
+  max-width: 960px;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.5rem;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  padding: 0.7rem 1.2rem;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.tab:hover {
+  color: var(--text-primary);
+}
+
+.activeTab {
+  color: var(--accent-purple) !important;
+  border-bottom-color: var(--accent-purple);
+}
+
+.tabBadge {
+  background: var(--priority-urgente);
+  color: #fff;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+  animation: pulse 2s infinite;
+}
+
+.section {
+  animation: fadeIn 0.2s ease;
+}
+
+.empty {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+/* Urgent list */
+.urgentList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.urgentCard {
+  background: var(--bg-secondary);
+  border: 1px solid rgba(255, 71, 87, 0.2);
+  border-radius: var(--radius);
+  padding: 1.2rem;
+}
+
+.urgentHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.urgentId {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.urgentDate {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.urgentCard h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.urgentDesc {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin-bottom: 0.6rem;
+}
+
+.urgentMeta {
+  display: flex;
+  gap: 1.2rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 0.8rem;
+}
+
+.urgentMeta strong {
+  color: var(--text-primary);
+}
+
+.noteInput {
+  margin-bottom: 0.6rem;
+}
+
+.urgentActions {
+  display: flex;
+  gap: 0.6rem;
+}
+
+/* User table */
+.userTable {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.tableHeader, .tableRow {
+  display: grid;
+  grid-template-columns: 1.5fr 2fr 1fr 0.8fr 1fr;
+  gap: 0.5rem;
+  padding: 0.8rem 1rem;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.tableHeader {
+  background: var(--bg-card);
+  font-weight: 700;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tableRow {
+  border-top: 1px solid var(--border);
+}
+
+.tableRow:hover {
+  background: var(--bg-card);
+}
+
+.userName {
+  font-weight: 600;
+}
+
+.userEmail {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+}
+
+.roleSelect {
+  width: auto;
+  padding: 0.3rem 1.8rem 0.3rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.active {
+  color: var(--accent-green);
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+.inactive {
+  color: var(--priority-urgente);
+  font-weight: 600;
+  font-size: 0.82rem;
+}

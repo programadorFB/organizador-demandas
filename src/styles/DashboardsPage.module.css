@@ -1,0 +1,56 @@
+.container { min-height: calc(100vh - 56px); padding: 2rem; display: flex; justify-content: center; background: var(--bg-primary); }
+.wrapper { width: 100%; max-width: 1200px; }
+
+.topBar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+.topBar h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+.healthSummary { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; color: var(--text-secondary); background: var(--bg-secondary); padding: 0.5rem 1rem; border-radius: 20px; border: 1px solid var(--border); }
+.healthDot { width: 8px; height: 8px; border-radius: 50%; }
+
+.tabs { display: flex; gap: 0.25rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+.tab { padding: 0.7rem 1.2rem; background: transparent; color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab:hover { color: var(--text-primary); }
+.activeTab { color: var(--accent-purple) !important; border-bottom-color: var(--accent-purple); }
+
+.loading { text-align: center; padding: 3rem; color: var(--text-secondary); animation: pulse 1.5s infinite; }
+
+/* Dashboards */
+.group { margin-bottom: 2rem; }
+.groupHeader { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; }
+.groupDot { width: 10px; height: 10px; border-radius: 50%; }
+.groupHeader h2 { font-size: 0.9rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+.groupCount { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); background: var(--bg-card); padding: 0.1rem 0.4rem; border-radius: 10px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.75rem; }
+
+.dashCard { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; transition: var(--transition); }
+.dashCard:hover { border-color: var(--border-light); transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3); }
+.dashTop { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.typeBadge { font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+.port { font-size: 0.75rem; color: var(--text-muted); font-family: monospace; }
+.dashCard h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.3rem; }
+.dashDesc { font-size: 0.8rem; color: var(--text-muted); line-height: 1.4; margin-bottom: 0.5rem; }
+.dashLink { font-size: 0.8rem; color: var(--accent-purple); font-weight: 600; display: inline-block; transition: var(--transition); }
+.dashLink:hover { color: var(--accent-purple-hover); transform: translateX(3px); }
+
+/* Containers */
+.containerToolbar { display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center; }
+.filterInput { max-width: 300px; }
+.containerGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 0.6rem; }
+
+.containerCard { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.85rem 1rem; transition: var(--transition); }
+.containerCard:hover { border-color: var(--border-light); }
+.containerCard.healthy { border-left: 3px solid var(--accent-green); }
+.containerCard.unhealthy { border-left: 3px solid var(--priority-urgente); }
+
+.containerTop { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.4rem; }
+.containerTop strong { font-size: 0.88rem; }
+.statusDot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.dotHealthy { background: var(--accent-green); box-shadow: 0 0 6px rgba(0,184,148,0.4); }
+.dotUnhealthy { background: var(--priority-urgente); box-shadow: 0 0 6px rgba(255,71,87,0.4); }
+
+.containerMeta { display: flex; gap: 0.75rem; margin-bottom: 0.3rem; }
+.containerStatus { font-size: 0.75rem; color: var(--accent-green); font-weight: 500; }
+.containerImage { font-size: 0.75rem; color: var(--text-muted); font-family: monospace; }
+.containerPorts { font-size: 0.7rem; color: var(--text-muted); font-family: monospace; word-break: break-all; }
+
+.empty { text-align: center; padding: 2rem; color: var(--text-muted); grid-column: 1 / -1; }

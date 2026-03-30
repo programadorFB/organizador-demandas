@@ -1,0 +1,84 @@
+.container { min-height: calc(100vh - 56px); padding: 2rem; display: flex; justify-content: center; background: var(--bg-primary); }
+.wrapper { width: 100%; max-width: 1100px; }
+
+.topBar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
+.topBar h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.02em; }
+
+.newSprintForm { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; animation: fadeIn 0.2s ease; }
+.newSprintForm input { flex: 1; min-width: 150px; }
+
+/* Active Sprint Banner */
+.activeBanner { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; margin-bottom: 1.5rem; display: flex; justify-content: space-between; gap: 2rem; flex-wrap: wrap; }
+.bannerLeft { flex: 1; min-width: 300px; }
+.bannerTitle { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.4rem; flex-wrap: wrap; }
+.liveIndicator { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); box-shadow: 0 0 8px rgba(0,184,148,0.5); animation: pulse 2s infinite; }
+.bannerTitle h2 { font-size: 1.2rem; font-weight: 700; letter-spacing: -0.02em; }
+.bannerDates { font-size: 0.8rem; color: var(--text-muted); }
+.bannerGoal { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.8rem; }
+
+.progressBar { width: 100%; height: 6px; background: var(--bg-card); border-radius: 3px; overflow: hidden; }
+.progressFill { height: 100%; background: linear-gradient(90deg, var(--accent-purple), var(--accent-cyan)); border-radius: 3px; transition: width 0.5s ease; }
+
+.bannerStats { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+.bannerStat { display: flex; flex-direction: column; align-items: center; gap: 0.1rem; }
+.statNum { font-size: 1.3rem; font-weight: 800; color: var(--text-primary); }
+.statLabel { font-size: 0.68rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+
+.noActive { text-align: center; padding: 2rem; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text-secondary); margin-bottom: 1.5rem; }
+
+/* Tabs */
+.tabs { display: flex; gap: 0.25rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); }
+.tab { padding: 0.7rem 1.2rem; background: transparent; color: var(--text-secondary); font-size: 0.9rem; font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tab:hover { color: var(--text-primary); }
+.activeTab { color: var(--accent-purple) !important; border-bottom-color: var(--accent-purple); }
+
+/* Charts */
+.chartsGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.chartCard { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.2rem; }
+.chartCard h3 { font-size: 0.82rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); margin-bottom: 0.8rem; }
+.chart { width: 100%; height: auto; }
+.emptyChart { text-align: center; padding: 3rem; color: var(--text-muted); font-size: 0.85rem; }
+
+/* Notes */
+.notesSection { animation: fadeIn 0.2s ease; }
+.noteForm { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; }
+.noteFormTop { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: center; }
+.noteFormTop select { width: auto; max-width: 200px; }
+
+.notesList { display: flex; flex-direction: column; gap: 0.6rem; }
+.noteCard { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; }
+.noteHeader { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; flex-wrap: wrap; }
+.noteTypeBadge { font-size: 0.68rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.03em; }
+.note_standup { background: rgba(108,92,231,0.12); color: var(--accent-purple); }
+.note_impediment { background: rgba(255,71,87,0.12); color: var(--priority-urgente); }
+.note_retrospective { background: rgba(0,210,211,0.12); color: var(--accent-cyan); }
+.note_review { background: rgba(0,184,148,0.12); color: var(--accent-green); }
+.note_planning { background: rgba(253,203,110,0.12); color: var(--status-revisao); }
+.noteAuthor { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); }
+.noteDate { font-size: 0.75rem; color: var(--text-muted); margin-left: auto; }
+.noteBody { font-size: 0.88rem; color: var(--text-primary); line-height: 1.6; white-space: pre-wrap; }
+
+/* Sprints list */
+.sprintsList { display: flex; flex-direction: column; gap: 0.6rem; animation: fadeIn 0.2s ease; }
+.sprintCard { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem 1.2rem; display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.sprintCard.sprint_active { border-left: 3px solid var(--accent-green); }
+.sprintCard.sprint_completed { border-left: 3px solid var(--text-muted); opacity: 0.75; }
+.sprintCard.sprint_planning { border-left: 3px solid var(--accent-purple); }
+
+.sprintInfo { flex: 1; }
+.sprintHeader { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.2rem; }
+.sprintStatus { font-size: 0.65rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.04em; background: var(--bg-card); color: var(--text-muted); }
+.sprintHeader h3 { font-size: 1rem; font-weight: 600; }
+.sprintDates { font-size: 0.78rem; color: var(--text-muted); }
+.sprintGoal { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.2rem; }
+
+.sprintStats { display: flex; align-items: center; gap: 1rem; font-size: 0.8rem; color: var(--text-secondary); }
+.velocityBadge { background: rgba(0,210,211,0.12); color: var(--accent-cyan); padding: 0.2rem 0.5rem; border-radius: 12px; font-weight: 700; font-size: 0.78rem; }
+
+.empty { text-align: center; padding: 2rem; color: var(--text-muted); }
+
+@media (max-width: 800px) {
+  .chartsGrid { grid-template-columns: 1fr; }
+  .activeBanner { flex-direction: column; }
+  .bannerStats { justify-content: space-around; }
+}
