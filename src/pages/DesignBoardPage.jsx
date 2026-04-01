@@ -37,7 +37,8 @@ export default function DesignBoardPage() {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifs, setShowNotifs] = useState(false);
-  const [bgImage, setBgImage] = useState(() => localStorage.getItem('design_bg') || '');
+  const bgKey = `design_bg_${user?.id || 'default'}`;
+  const [bgImage, setBgImage] = useState(() => localStorage.getItem(bgKey) || '');
   const [showBgInput, setShowBgInput] = useState(false);
   const [dragCardStatus, setDragCardStatus] = useState(null);
   const [showManageDesigners, setShowManageDesigners] = useState(false);
@@ -95,7 +96,7 @@ export default function DesignBoardPage() {
 
   const handleBgSave = (url) => {
     setBgImage(url);
-    localStorage.setItem('design_bg', url);
+    localStorage.setItem(bgKey, url);
     setShowBgInput(false);
   };
 
@@ -243,11 +244,11 @@ export default function DesignBoardPage() {
               <button className={styles.btnGold} onClick={() => setShowNewCard(!showNewCard)}>
                 {showNewCard ? 'Cancelar' : '+ Nova Demanda'}
               </button>
-              <button className={styles.bgBtn} onClick={() => setShowBgInput(!showBgInput)} title="Plano de fundo">🖼</button>
               <button className={styles.btnGold} onClick={() => navigate('/design/analytics')}>📊 Analytics</button>
               <button className={styles.btnGhost} onClick={() => setShowManageDesigners(!showManageDesigners)}>👥 Designers</button>
             </>
           )}
+          <button className={styles.bgBtn} onClick={() => setShowBgInput(!showBgInput)} title="Plano de fundo">🖼</button>
           <div className={styles.userInfo}>
             <span>{user?.name}</span>
             <button className={styles.logoutBtn} onClick={handleLogout}>Sair</button>
