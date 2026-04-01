@@ -40,18 +40,81 @@
 .logoutBtn { background: transparent; color: #666; font-size: 0.78rem; padding: 0.3rem 0.5rem; border-radius: 4px; }
 .logoutBtn:hover { color: #ff4757; background: rgba(255,71,87,0.08); }
 
-/* New Card Form */
-.newCardForm {
-  display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;
-  padding: 0.8rem 1.2rem; background: #0d0d0d; border-bottom: 1px solid #1a1a1a;
-  animation: fadeIn 0.2s ease;
+/* New Card Modal */
+.modalOverlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
+  display: flex; justify-content: center; align-items: flex-start; padding: 3rem 1rem;
+  z-index: 300; overflow-y: auto; animation: fadeIn 0.15s ease;
 }
-.newCardForm input, .newCardForm select, .newCardForm textarea {
-  flex: 1; min-width: 140px; padding: 0.5rem 0.7rem; background: #111; border: 1px solid #2a2a2a;
-  border-radius: 6px; color: #e8e8f0; font-size: 0.82rem;
+.newCardModal {
+  width: 100%; max-width: 560px; background: #0d0d0d; border: 1px solid #222;
+  border-radius: 14px; box-shadow: 0 8px 40px rgba(0,0,0,0.6); animation: slideUp 0.25s ease;
 }
-.newCardForm textarea { min-width: 200px; }
-.newCardForm input:focus, .newCardForm select:focus, .newCardForm textarea:focus { border-color: #C9971A; outline: none; }
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+.ncHeader {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 1rem 1.3rem; border-bottom: 1px solid #1a1a1a;
+}
+.ncHeader h2 { font-size: 1.05rem; font-weight: 700; color: #C9971A; }
+.ncClose { background: transparent; color: #666; font-size: 1.1rem; padding: 0.3rem 0.5rem; border-radius: 6px; cursor: pointer; }
+.ncClose:hover { background: #181818; color: #ccc; }
+
+.ncBody { padding: 1.3rem; display: flex; flex-direction: column; gap: 0.9rem; }
+
+.ncSection { display: flex; flex-direction: column; gap: 0.3rem; }
+.ncLabel { font-size: 0.72rem; font-weight: 700; color: #777; text-transform: uppercase; letter-spacing: 0.04em; }
+.ncSection input, .ncSection select, .ncSection textarea {
+  padding: 0.55rem 0.75rem; background: #111; border: 1px solid #222; border-radius: 8px;
+  color: #e8e8f0; font-size: 0.88rem; width: 100%;
+}
+.ncSection input:focus, .ncSection select:focus, .ncSection textarea:focus { border-color: #C9971A; outline: none; box-shadow: 0 0 0 3px rgba(201,151,26,0.1); }
+.ncSection textarea { resize: vertical; min-height: 80px; }
+
+.ncRow { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; }
+.ncRow:has(> :nth-child(3)) { grid-template-columns: 1fr 1fr 1fr; }
+
+.ncPriority { display: flex; gap: 0.5rem; }
+.ncPriBtn {
+  flex: 1; padding: 0.5rem; border: 2px solid #222; border-radius: 8px; background: transparent;
+  font-size: 0.82rem; font-weight: 700; cursor: pointer; transition: all 0.15s; text-align: center;
+}
+.ncPri_normal { color: #C9971A; }
+.ncPri_alta { color: #ff6b35; }
+.ncPri_urgente { color: #ff4757; }
+.ncPriBtn:hover { border-color: #444; background: #111; }
+.ncPriActive.ncPri_normal { border-color: #C9971A; background: rgba(201,151,26,0.08); }
+.ncPriActive.ncPri_alta { border-color: #ff6b35; background: rgba(255,107,53,0.08); }
+.ncPriActive.ncPri_urgente { border-color: #ff4757; background: rgba(255,71,87,0.08); }
+
+/* Checklist in create modal */
+.ncCheckWrap { display: flex; flex-direction: column; gap: 0.4rem; }
+.ncCheckGroup { display: flex; flex-direction: column; gap: 0.25rem; }
+.ncCheckSectionLabel { font-size: 0.72rem; font-weight: 700; color: #C9971A; text-transform: uppercase; letter-spacing: 0.03em; padding: 0.2rem 0.4rem; background: #0f0f0f; border-left: 3px solid #C9971A; border-radius: 4px; margin-top: 0.3rem; }
+.ncCheckItem { display: flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.5rem; background: #111; border: 1px solid #1e1e1e; border-radius: 6px; font-size: 0.85rem; color: #ccc; }
+.ncCheckDot { width: 6px; height: 6px; border-radius: 50%; background: #C9971A; flex-shrink: 0; }
+.ncCheckDel { background: transparent; color: #444; font-size: 0.72rem; padding: 0.15rem 0.3rem; border-radius: 4px; cursor: pointer; margin-left: auto; flex-shrink: 0; }
+.ncCheckDel:hover { color: #ff4757; background: rgba(255,71,87,0.08); }
+.ncCheckAdd { display: flex; gap: 0.4rem; align-items: center; }
+.ncCheckAdd input { flex: 1; padding: 0.4rem 0.6rem; background: #111; border: 1px solid #222; border-radius: 6px; color: #e8e8f0; font-size: 0.82rem; }
+.ncCheckAdd input:focus { border-color: #C9971A; outline: none; }
+.ncCheckSelect { width: auto; min-width: 100px; max-width: 140px; padding: 0.4rem 0.5rem; background: #111; border: 1px solid #222; border-radius: 6px; color: #999; font-size: 0.75rem; }
+.ncCheckSelect:focus { border-color: #C9971A; outline: none; }
+.ncAddSectionBtn { background: transparent; color: #666; font-size: 0.75rem; font-weight: 600; padding: 0.25rem 0; cursor: pointer; text-align: left; }
+.ncAddSectionBtn:hover { color: #C9971A; }
+
+/* Files in create modal */
+.ncFilesWrap { display: flex; flex-direction: column; gap: 0.4rem; }
+.ncFileList { display: flex; flex-direction: column; gap: 0.25rem; }
+.ncFileItem { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; background: #111; border: 1px solid #1e1e1e; border-radius: 6px; }
+.ncFileName { font-size: 0.82rem; color: #ccc; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ncFileSize { font-size: 0.7rem; color: #555; white-space: nowrap; }
+.ncUploadBtn { cursor: pointer; display: inline-block; }
+
+.ncFooter {
+  display: flex; justify-content: flex-end; gap: 0.5rem;
+  padding: 1rem 1.3rem; border-top: 1px solid #1a1a1a;
+}
 
 /* Board */
 .board {

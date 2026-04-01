@@ -42,7 +42,7 @@ export default function generateReport(data) {
   doc.setFontSize(14);
   doc.setTextColor(...GRAY);
   doc.setFont('helvetica', 'normal');
-  doc.text('Design Board \u2014 Relat\u00f3rio de Produtividade', W / 2, 72, { align: 'center' });
+  doc.text('Design Board — Relatório de Produtividade', W / 2, 72, { align: 'center' });
 
   // Date
   doc.setFontSize(10);
@@ -58,7 +58,7 @@ export default function generateReport(data) {
   const boxW = contentW / 4;
   const summaryItems = [
     { label: 'Designers', value: data.perDesigner.length, color: GOLD },
-    { label: 'Conclu\u00eddos', value: totalCompleted, color: [0, 184, 148] },
+    { label: 'Concluídos', value: totalCompleted, color: [0, 184, 148] },
     { label: 'Ativos', value: totalActive, color: [9, 132, 227] },
     { label: 'Atrasados', value: totalOverdue, color: [255, 71, 87] },
   ];
@@ -95,14 +95,14 @@ export default function generateReport(data) {
   doc.autoTable({
     startY: y,
     margin: { left: MARGIN, right: MARGIN },
-    head: [['Designer', 'Conclu\u00eddos', 'Ativos', 'Atrasados', 'Tempo M\u00e9dio', 'Horas Entregues']],
+    head: [['Designer', 'Concluídos', 'Ativos', 'Atrasados', 'Tempo Médio', 'Horas Entregues']],
     body: data.perDesigner.map(d => [
       d.name,
       d.completed,
       d.active,
       d.overdue,
-      d.avg_hours_to_complete > 0 ? `${d.avg_hours_to_complete}h` : '\u2014',
-      d.total_estimated_hours > 0 ? `${d.total_estimated_hours}h` : '\u2014',
+      d.avg_hours_to_complete > 0 ? `${d.avg_hours_to_complete}h` : '—',
+      d.total_estimated_hours > 0 ? `${d.total_estimated_hours}h` : '—',
     ]),
     theme: 'plain',
     styles: { fontSize: 9, textColor: WHITE, cellPadding: 3, fillColor: false },
@@ -125,7 +125,7 @@ export default function generateReport(data) {
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...GOLD);
-  doc.text('CARDS CONCLU\u00cdDOS POR DESIGNER', MARGIN, y);
+  doc.text('CARDS CONCLUÍDOS POR DESIGNER', MARGIN, y);
   y += 8;
 
   const maxCompleted = Math.max(...data.perDesigner.map(d => d.completed), 1);
@@ -154,13 +154,13 @@ export default function generateReport(data) {
     y += 12;
   });
 
-  // ─── Page 3: Distribui\u00e7\u00f5es ───
+  // ─── Page 3: Distribuições ───
   y += 10;
   checkPage(80);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...GOLD);
-  doc.text('DISTRIBUI\u00c7\u00c3O POR STATUS', MARGIN, y);
+  doc.text('DISTRIBUIÇÃO POR STATUS', MARGIN, y);
   y += 8;
 
   // Draw pie chart as colored rectangles (legend style)
@@ -194,7 +194,7 @@ export default function generateReport(data) {
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...GOLD);
-  doc.text('DISTRIBUI\u00c7\u00c3O POR PRIORIDADE', MARGIN, y);
+  doc.text('DISTRIBUIÇÃO POR PRIORIDADE', MARGIN, y);
   y += 8;
 
   const totalByPri = data.byPriority.reduce((s, d) => s + d.count, 0) || 1;
@@ -256,7 +256,7 @@ export default function generateReport(data) {
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...GOLD);
-  doc.text('ALTERA\u00c7\u00d5ES (RETRABALHO)', MARGIN, y);
+  doc.text('ALTERAÇÕES (RETRABALHO)', MARGIN, y);
   y += 8;
 
   if (data.rework.length > 0) {
@@ -281,7 +281,7 @@ export default function generateReport(data) {
   } else {
     doc.setFontSize(8);
     doc.setTextColor(...GRAY);
-    doc.text('Nenhuma altera\u00e7\u00e3o registrada', MARGIN, y + 3);
+    doc.text('Nenhuma alteração registrada', MARGIN, y + 3);
     y += 9;
   }
 
@@ -302,8 +302,8 @@ export default function generateReport(data) {
       body: data.slowest.map((s, i) => [
         `#${i + 1}`,
         s.title,
-        s.designer_name || '\u2014',
-        s.estimated_hours ? `${s.estimated_hours}h` : '\u2014',
+        s.designer_name || '—',
+        s.estimated_hours ? `${s.estimated_hours}h` : '—',
         `${s.hours_taken}h`,
       ]),
       theme: 'plain',
@@ -337,7 +337,7 @@ export default function generateReport(data) {
       let total = 0;
       designerNames.forEach(dn => {
         const val = data.weeklyOutput.find(d => d.week === w && d.designer_name === dn)?.count || 0;
-        row.push(val || '\u2014');
+        row.push(val || '—');
         total += val;
       });
       row.push(total);
@@ -365,7 +365,7 @@ export default function generateReport(data) {
     doc.rect(0, 295, W, 2, 'F');
     doc.setFontSize(7);
     doc.setTextColor(...GRAY);
-    doc.text(`FUZABALTA Design Board \u2014 P\u00e1gina ${i}/${pageCount}`, W / 2, 292, { align: 'center' });
+    doc.text(`FUZABALTA Design Board — Página ${i}/${pageCount}`, W / 2, 292, { align: 'center' });
   }
 
   doc.save(`FUZABALTA_Relatorio_${new Date().toISOString().slice(0, 10)}.pdf`);

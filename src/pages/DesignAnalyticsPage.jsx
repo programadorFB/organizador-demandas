@@ -6,8 +6,8 @@ import generateReport from '../services/generateReport';
 import styles from '../styles/DesignAnalytics.module.css';
 
 const STATUS_LABELS = {
-  links: 'Links', demanda: 'Demanda', em_andamento: 'Em Andamento', analise: 'An\u00e1lise',
-  alteracoes: 'Altera\u00e7\u00f5es', concluidas: 'Conclu\u00eddas', pos_gestores: 'P\u00f3s Gestores', reunioes: 'Reuni\u00f5es',
+  links: 'Links', demanda: 'Demanda', em_andamento: 'Em Andamento', analise: 'Análise',
+  alteracoes: 'Alterações', concluidas: 'Concluídas', pos_gestores: 'Pós Gestores', reunioes: 'Reuniões',
 };
 const STATUS_COLORS = {
   links: '#6c5ce7', demanda: '#C9971A', em_andamento: '#0984e3', analise: '#fdcb6e',
@@ -151,18 +151,18 @@ export default function DesignAnalyticsPage() {
               <div className={styles.designerAvatar}>{d.name.slice(0, 2).toUpperCase()}</div>
               <h3>{d.name}</h3>
               <div className={styles.designerStats}>
-                <div className={styles.dStat}><span className={styles.dVal}>{d.completed}</span><span className={styles.dLbl}>Conclu\u00eddos</span></div>
+                <div className={styles.dStat}><span className={styles.dVal}>{d.completed}</span><span className={styles.dLbl}>Concluídos</span></div>
                 <div className={styles.dStat}><span className={styles.dVal}>{d.active}</span><span className={styles.dLbl}>Ativos</span></div>
                 <div className={`${styles.dStat} ${d.overdue > 0 ? styles.dDanger : ''}`}><span className={styles.dVal}>{d.overdue}</span><span className={styles.dLbl}>Atrasados</span></div>
               </div>
               <div className={styles.designerMeta}>
                 <div className={styles.metaRow}>
-                  <span>Tempo m\u00e9dio de conclus\u00e3o</span>
-                  <strong>{d.avg_hours_to_complete > 0 ? `${d.avg_hours_to_complete}h` : '\u2014'}</strong>
+                  <span>Tempo médio de conclusão</span>
+                  <strong>{d.avg_hours_to_complete > 0 ? `${d.avg_hours_to_complete}h` : '—'}</strong>
                 </div>
                 <div className={styles.metaRow}>
                   <span>Horas estimadas entregues</span>
-                  <strong>{d.total_estimated_hours > 0 ? `${d.total_estimated_hours}h` : '\u2014'}</strong>
+                  <strong>{d.total_estimated_hours > 0 ? `${d.total_estimated_hours}h` : '—'}</strong>
                 </div>
               </div>
             </div>
@@ -179,7 +179,7 @@ export default function DesignAnalyticsPage() {
 
           {/* Status distribution */}
           <div className={styles.chartCard}>
-            <h3>Distribui\u00e7\u00e3o por Status</h3>
+            <h3>Distribuição por Status</h3>
             <DonutChart data={data.byStatus} labelKey="status" valueKey="count"
               colorFn={(d) => STATUS_COLORS[d.status] || '#555'} />
           </div>
@@ -199,7 +199,7 @@ export default function DesignAnalyticsPage() {
 
           {/* Rework */}
           <div className={styles.chartCard}>
-            <h3>Altera\u00e7\u00f5es (Retrabalho)</h3>
+            <h3>Alterações (Retrabalho)</h3>
             <BarChart data={data.rework} labelKey="name" valueKey="alteracoes" color="#ff6b35" />
           </div>
 
@@ -213,13 +213,13 @@ export default function DesignAnalyticsPage() {
                     <span className={styles.slowRank}>#{i + 1}</span>
                     <div className={styles.slowInfo}>
                       <span className={styles.slowTitle}>{s.title}</span>
-                      <span className={styles.slowMeta}>{s.designer_name} &middot; estimado: {s.estimated_hours || '\u2014'}h</span>
+                      <span className={styles.slowMeta}>{s.designer_name} &middot; estimado: {s.estimated_hours || '—'}h</span>
                     </div>
                     <span className={styles.slowTime}>{s.hours_taken}h</span>
                   </div>
                 ))}
               </div>
-            ) : <p className={styles.empty}>Nenhum card conclu\u00eddo ainda</p>}
+            ) : <p className={styles.empty}>Nenhum card concluído ainda</p>}
           </div>
         </div>
       </div>

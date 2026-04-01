@@ -4,11 +4,11 @@ import { useAuth } from '../hooks/useAuth';
 import styles from '../styles/DesignCardModal.module.css';
 
 const STATUS_LABELS = {
-  links: 'Links', demanda: 'Demanda', em_andamento: 'Em Andamento', analise: 'An\u00e1lise',
-  alteracoes: 'Altera\u00e7\u00f5es', concluidas: 'Conclu\u00eddas', pos_gestores: 'Mandar P\u00f3s Gestores', reunioes: 'Reuni\u00f5es',
+  links: 'Links', demanda: 'Demanda', em_andamento: 'Em Andamento', analise: 'Análise',
+  alteracoes: 'Alterações', concluidas: 'Concluídas', pos_gestores: 'Mandar Pós Gestores', reunioes: 'Reuniões',
 };
 
-const DELIVERY_TYPES = ['Story', 'Post Feed', 'Reels', 'Banner', 'Thumbnail', 'Logo', 'Criativo Ads', 'Carrossel', 'Capa', 'Outro'];
+const DELIVERY_TYPES = ['Criativo', 'Live'];
 
 export default function DesignCardModal({ card, isAdmin, designers, onClose, onUpdate }) {
   const { user } = useAuth();

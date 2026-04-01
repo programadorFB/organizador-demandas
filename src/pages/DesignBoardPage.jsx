@@ -9,17 +9,17 @@ const ALL_COLUMNS = [
   { key: 'links', label: 'Links', color: '#6c5ce7' },
   { key: 'demanda', label: 'Demanda', color: '#C9971A' },
   { key: 'em_andamento', label: 'Em Andamento', color: '#0984e3' },
-  { key: 'analise', label: 'An\u00e1lise', color: '#fdcb6e' },
-  { key: 'alteracoes', label: 'Altera\u00e7\u00f5es', color: '#ff6b35' },
-  { key: 'concluidas', label: 'Conclu\u00eddas', color: '#00b894' },
-  { key: 'pos_gestores', label: 'Mandar P\u00f3s Gestores', color: '#a29bfe' },
-  { key: 'reunioes', label: 'Reuni\u00f5es', color: '#fd79a8' },
+  { key: 'analise', label: 'Análise', color: '#fdcb6e' },
+  { key: 'alteracoes', label: 'Alterações', color: '#ff6b35' },
+  { key: 'concluidas', label: 'Concluídas', color: '#00b894' },
+  { key: 'pos_gestores', label: 'Mandar Pós Gestores', color: '#a29bfe' },
+  { key: 'reunioes', label: 'Reuniões', color: '#fd79a8' },
 ];
 
 const EDITOR_COLUMNS = ['links', 'demanda', 'em_andamento', 'alteracoes'];
 const EDITOR_ALLOWED_MOVES = { demanda: ['em_andamento'], em_andamento: ['analise'], alteracoes: ['analise'] };
 
-const DELIVERY_TYPES = ['Story', 'Post Feed', 'Reels', 'Banner', 'Thumbnail', 'Logo', 'Criativo Ads', 'Carrossel', 'Capa', 'Outro'];
+const DELIVERY_TYPES = ['Criativo', 'Live'];
 
 export default function DesignBoardPage() {
   const { user, logout } = useAuth();
@@ -42,7 +42,13 @@ export default function DesignBoardPage() {
   const [dragCardStatus, setDragCardStatus] = useState(null);
   const [showManageDesigners, setShowManageDesigners] = useState(false);
   const [newDesigner, setNewDesigner] = useState({ name: '', email: '', password: '' });
-  const [newCard, setNewCard] = useState({ title: '', expert_name: '', delivery_type: '', priority: 'normal', designer_id: '', start_date: '', deadline: '', estimated_hours: '', description: '' });
+  const [newCard, setNewCard] = useState({ title: '', expert_name: '', delivery_type: '', priority: 'normal', designer_id: '', start_date: '', deadline: '', estimated_hours: '', description: '', status: 'demanda' });
+  const [ncChecklist, setNcChecklist] = useState([]);
+  const [ncNewItem, setNcNewItem] = useState('');
+  const [ncNewSection, setNcNewSection] = useState('');
+  const [ncShowNewSection, setNcShowNewSection] = useState(false);
+  const [ncNewSectionName, setNcNewSectionName] = useState('');
+  const [ncFiles, setNcFiles] = useState([]);
 
   const loadCards = useCallback(async () => {
     try {
@@ -149,18 +155,53 @@ export default function DesignBoardPage() {
   const handleCreateCard = async (e) => {
     e.preventDefault();
     try {
-      await designApi.createCard({
+      const card = await designApi.createCard({
         ...newCard,
         designer_id: newCard.designer_id ? parseInt(newCard.designer_id) : null,
         estimated_hours: newCard.estimated_hours ? parseFloat(newCard.estimated_hours) : null,
         start_date: newCard.start_date || null,
         deadline: newCard.deadline || null,
       });
-      setNewCard({ title: '', expert_name: '', delivery_type: '', priority: 'normal', designer_id: '', start_date: '', deadline: '', estimated_hours: '', description: '' });
+      // Adicionar checklist items
+      for (const item of ncChecklist) {
+        await designApi.addCheckItem(card.id, item.text, item.section || undefined);
+      }
+      // Upload de anexos
+      if (ncFiles.length > 0) {
+        await designApi.uploadAttachments(card.id, ncFiles);
+      }
+      setNewCard({ title: '', expert_name: '', delivery_type: '', priority: 'normal', designer_id: '', start_date: '', deadline: '', estimated_hours: '', description: '', status: 'demanda' });
+      setNcChecklist([]);
+      setNcFiles([]);
+      setNcNewItem('');
+      setNcNewSection('');
       setShowNewCard(false);
       loadCards();
       loadMeta();
     } catch (err) { alert(err.message); }
+  };
+
+  const ncAddItem = () => {
+    if (!ncNewItem.trim()) return;
+    setNcChecklist(prev => [...prev, { text: ncNewItem, section: ncNewSection || null }]);
+    setNcNewItem('');
+  };
+  const ncRemoveItem = (idx) => setNcChecklist(prev => prev.filter((_, i) => i !== idx));
+  const ncAddSection = () => {
+    if (!ncNewSectionName.trim()) return;
+    setNcNewSection(ncNewSectionName.trim());
+    setNcNewSectionName('');
+    setNcShowNewSection(false);
+  };
+  const ncAddFiles = (e) => {
+    setNcFiles(prev => [...prev, ...Array.from(e.target.files)]);
+    e.target.value = '';
+  };
+  const ncRemoveFile = (idx) => setNcFiles(prev => prev.filter((_, i) => i !== idx));
+  const formatSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
   const handleLogout = () => { logout(); navigate('/design'); };
@@ -243,30 +284,148 @@ export default function DesignBoardPage() {
         </div>
       )}
 
-      {/* New Card Form */}
+      {/* New Card Modal */}
       {showNewCard && (
-        <form className={styles.newCardForm} onSubmit={handleCreateCard}>
-          <input placeholder="Titulo *" value={newCard.title} onChange={e => setNewCard(p => ({ ...p, title: e.target.value }))} required />
-          <input placeholder="Nome do Expert *" value={newCard.expert_name} onChange={e => setNewCard(p => ({ ...p, expert_name: e.target.value }))} required />
-          <select value={newCard.delivery_type} onChange={e => setNewCard(p => ({ ...p, delivery_type: e.target.value }))}>
-            <option value="">Tipo de Entrega</option>
-            {DELIVERY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-          </select>
-          <select value={newCard.designer_id} onChange={e => setNewCard(p => ({ ...p, designer_id: e.target.value }))}>
-            <option value="">Designer</option>
-            {designers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-          </select>
-          <select value={newCard.priority} onChange={e => setNewCard(p => ({ ...p, priority: e.target.value }))}>
-            <option value="normal">Normal</option>
-            <option value="alta">Alta</option>
-            <option value="urgente">Urgente</option>
-          </select>
-          <input type="datetime-local" placeholder="Inicio" value={newCard.start_date} onChange={e => setNewCard(p => ({ ...p, start_date: e.target.value }))} />
-          <input type="datetime-local" placeholder="Deadline" value={newCard.deadline} onChange={e => setNewCard(p => ({ ...p, deadline: e.target.value }))} />
-          <input type="number" step="0.5" placeholder="Horas estimadas" value={newCard.estimated_hours} onChange={e => setNewCard(p => ({ ...p, estimated_hours: e.target.value }))} />
-          <textarea placeholder="Descricao" value={newCard.description} onChange={e => setNewCard(p => ({ ...p, description: e.target.value }))} rows={2} />
-          <button type="submit" className={styles.btnGold}>Criar Card</button>
-        </form>
+        <div className={styles.modalOverlay} onClick={() => setShowNewCard(false)}>
+          <form className={styles.newCardModal} onClick={e => e.stopPropagation()} onSubmit={handleCreateCard}>
+            <div className={styles.ncHeader}>
+              <h2>Nova Demanda</h2>
+              <button type="button" className={styles.ncClose} onClick={() => setShowNewCard(false)}>✕</button>
+            </div>
+            <div className={styles.ncBody}>
+              <div className={styles.ncSection}>
+                <label className={styles.ncLabel}>Título *</label>
+                <input placeholder="Ex: Criativo para campanha de verão" value={newCard.title} onChange={e => setNewCard(p => ({ ...p, title: e.target.value }))} required />
+              </div>
+              <div className={styles.ncSection}>
+                <label className={styles.ncLabel}>Nome do Expert *</label>
+                <input placeholder="Nome do expert / cliente" value={newCard.expert_name} onChange={e => setNewCard(p => ({ ...p, expert_name: e.target.value }))} required />
+              </div>
+              <div className={styles.ncRow}>
+                <div className={styles.ncSection}>
+                  <label className={styles.ncLabel}>Tipo de Entrega</label>
+                  <select value={newCard.delivery_type} onChange={e => setNewCard(p => ({ ...p, delivery_type: e.target.value }))}>
+                    <option value="">Selecione</option>
+                    {DELIVERY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div className={styles.ncSection}>
+                  <label className={styles.ncLabel}>Designer Responsável</label>
+                  <select value={newCard.designer_id} onChange={e => setNewCard(p => ({ ...p, designer_id: e.target.value }))}>
+                    <option value="">Selecione</option>
+                    {designers.filter(d => d.role === 'designer').map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className={styles.ncSection}>
+                <label className={styles.ncLabel}>Prioridade</label>
+                <div className={styles.ncPriority}>
+                  {[['normal','Normal'],['alta','Alta'],['urgente','Urgente']].map(([v, l]) => (
+                    <button type="button" key={v} className={`${styles.ncPriBtn} ${styles[`ncPri_${v}`]} ${newCard.priority === v ? styles.ncPriActive : ''}`} onClick={() => setNewCard(p => ({ ...p, priority: v }))}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              <div className={styles.ncRow}>
+                <div className={styles.ncSection}>
+                  <label className={styles.ncLabel}>Início</label>
+                  <input type="datetime-local" value={newCard.start_date} onChange={e => setNewCard(p => ({ ...p, start_date: e.target.value }))} />
+                </div>
+                <div className={styles.ncSection}>
+                  <label className={styles.ncLabel}>Deadline</label>
+                  <input type="datetime-local" value={newCard.deadline} onChange={e => setNewCard(p => ({ ...p, deadline: e.target.value }))} />
+                </div>
+                <div className={styles.ncSection}>
+                  <label className={styles.ncLabel}>Horas Estimadas</label>
+                  <input type="number" step="0.5" min="0" placeholder="0" value={newCard.estimated_hours} onChange={e => setNewCard(p => ({ ...p, estimated_hours: e.target.value }))} />
+                </div>
+              </div>
+              <div className={styles.ncSection}>
+                <label className={styles.ncLabel}>Descrição</label>
+                <textarea placeholder="Detalhes da demanda, referências, observações..." value={newCard.description} onChange={e => setNewCard(p => ({ ...p, description: e.target.value }))} rows={4} />
+              </div>
+              <div className={styles.ncSection}>
+                <label className={styles.ncLabel}>Coluna Inicial</label>
+                <select value={newCard.status || 'demanda'} onChange={e => setNewCard(p => ({ ...p, status: e.target.value }))}>
+                  {ALL_COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                </select>
+              </div>
+
+              {/* Checklist */}
+              <div className={styles.ncSection}>
+                <label className={styles.ncLabel}>Checklist</label>
+                {(() => {
+                  const sections = {};
+                  ncChecklist.forEach((item, i) => {
+                    const key = item.section || '__none__';
+                    if (!sections[key]) sections[key] = [];
+                    sections[key].push({ ...item, _idx: i });
+                  });
+                  const sectionNames = [...new Set(ncChecklist.map(i => i.section).filter(Boolean))];
+                  return (
+                    <div className={styles.ncCheckWrap}>
+                      {Object.entries(sections).map(([key, items]) => (
+                        <div key={key} className={styles.ncCheckGroup}>
+                          {key !== '__none__' && <span className={styles.ncCheckSectionLabel}>{key}</span>}
+                          {items.map(item => (
+                            <div key={item._idx} className={styles.ncCheckItem}>
+                              <span className={styles.ncCheckDot} />
+                              <span>{item.text}</span>
+                              <button type="button" className={styles.ncCheckDel} onClick={() => ncRemoveItem(item._idx)}>✕</button>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                      <div className={styles.ncCheckAdd}>
+                        <select className={styles.ncCheckSelect} value={ncNewSection} onChange={e => setNcNewSection(e.target.value)}>
+                          <option value="">Sem setor</option>
+                          {sectionNames.map(s => <option key={s} value={s}>{s}</option>)}
+                          {ncNewSection && !sectionNames.includes(ncNewSection) && <option value={ncNewSection}>{ncNewSection}</option>}
+                        </select>
+                        <input placeholder="Novo item..." value={ncNewItem} onChange={e => setNcNewItem(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), ncAddItem())} />
+                        <button type="button" className={styles.btnGold} onClick={ncAddItem}>+</button>
+                      </div>
+                      {!ncShowNewSection ? (
+                        <button type="button" className={styles.ncAddSectionBtn} onClick={() => setNcShowNewSection(true)}>+ Novo Setor</button>
+                      ) : (
+                        <div className={styles.ncCheckAdd}>
+                          <input placeholder="Nome do setor..." value={ncNewSectionName} onChange={e => setNcNewSectionName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), ncAddSection())} />
+                          <button type="button" className={styles.btnGold} onClick={ncAddSection}>Criar</button>
+                          <button type="button" className={styles.ncCheckDel} onClick={() => setNcShowNewSection(false)}>✕</button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Anexos */}
+              <div className={styles.ncSection}>
+                <label className={styles.ncLabel}>Anexos</label>
+                <div className={styles.ncFilesWrap}>
+                  {ncFiles.length > 0 && (
+                    <div className={styles.ncFileList}>
+                      {ncFiles.map((f, i) => (
+                        <div key={i} className={styles.ncFileItem}>
+                          <span className={styles.ncFileName}>{f.name}</span>
+                          <span className={styles.ncFileSize}>{formatSize(f.size)}</span>
+                          <button type="button" className={styles.ncCheckDel} onClick={() => ncRemoveFile(i)}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <label className={styles.ncUploadBtn}>
+                    <input type="file" multiple onChange={ncAddFiles} style={{ display: 'none' }} />
+                    <span className={styles.btnGhost}>+ Selecionar Arquivos</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div className={styles.ncFooter}>
+              <button type="button" className={styles.btnGhost} onClick={() => setShowNewCard(false)}>Cancelar</button>
+              <button type="submit" className={styles.btnGold}>Criar Demanda</button>
+            </div>
+          </form>
+        </div>
       )}
 
       {/* Manage Designers */}
