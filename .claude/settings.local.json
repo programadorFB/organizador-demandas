@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker compose:*)",
+      "Bash(docker --version)",
+      "Bash(pg_isready)",
+      "Bash(psql --version)",
+      "Bash(npm install:*)",
+      "Bash(node:*)",
+      "Bash(psql:*)",
+      "Bash(npm start:*)",
+      "Bash(curl -s http://localhost:3002/api/auth/me -w \"\\\\n%{http_code}\")",
+      "Bash(curl -s http://localhost:5173 -w \"\\\\n%{http_code}\")",
+      "Bash(curl -s http://localhost:3002/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"admin@admin.com\",\"password\":\"admin123\"}')",
+      "Bash(python -c \"import sys,json; print\\(json.load\\(sys.stdin\\)['token']\\)\")",
+      "Bash(curl -s http://localhost:3002/api/demands -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwibmFtZSI6IkFkbWluaXN0cmFkb3IiLCJlbWFpbCI6ImFkbWluQGFkbWluLmNvbSIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3NTA1NTU0NywiZXhwIjoxNzc1NjYwMzQ3fQ.Q-hKC9S8JdMs3deD4xZmdZoqE9hqYu4FUTZsBMRKn2o' -H 'Content-Type: application/json' -d '{:*)",
+      "Bash(curl -s http://localhost:3002/api/demands/1/attachments -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwibmFtZSI6IkFkbWluaXN0cmFkb3IiLCJlbWFpbCI6ImFkbWluQGFkbWluLmNvbSIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc3NTA1NTU0NywiZXhwIjoxNzc1NjYwMzQ3fQ.Q-hKC9S8JdMs3deD4xZmdZoqE9hqYu4FUTZsBMRKn2o')",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(f'  {a[\\\\\"original_name\\\\\"]} - {a[\\\\\"mime_type\\\\\"]} - {a[\\\\\"user_name\\\\\"]}'\\) for a in d]\")",
+      "Bash(curl -s http://localhost:3002/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"pepo@fuzabalta.com\",\"password\":\"editor123\"}')",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'Login OK: {d[\\\\\"user\\\\\"][\\\\\"name\\\\\"]} \\({d[\\\\\"user\\\\\"][\\\\\"role\\\\\"]}\\)'\\)\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'Card criado: #{d[\\\\\"id\\\\\"]} - {d[\\\\\"title\\\\\"]} \\(status: {d[\\\\\"status\\\\\"]}\\)'\\)\")",
+      "Bash(curl:*)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'Listagem OK: {len\\(d\\)} anexo\\(s\\)'\\)\")",
+      "Bash(python -c ':*)",
+      "Bash(python -c \" import sys,json for h in json.load\\(sys.stdin\\): print\\(f' {h[\\\\\"user_name\\\\\"]}: {h[\\\\\"action\\\\\"]}'\\) \")",
+      "Bash(ssh:*)",
+      "Bash(rsync:*)",
+      "Bash(scp:*)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('user',{}\\).get\\('name','ERRO: ' + d.get\\('error',''\\)\\)\\)\")",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(python -c \"import sys,json; [print\\(f' {d[\\\\\"name\\\\\"]} \\({d[\\\\\"role\\\\\"]}\\) active={d.get\\(\\\\\"active\\\\\",True\\)}'\\) for d in json.load\\(sys.stdin\\)]\")"
+    ]
+  }
+}

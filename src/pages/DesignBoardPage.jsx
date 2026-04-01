@@ -35,11 +35,13 @@ export default function DesignBoardPage() {
   const [showNewCard, setShowNewCard] = useState(false);
   const [dragOverCol, setDragOverCol] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifs, setShowNotifs] = useState(false);
   const [bgImage, setBgImage] = useState(() => localStorage.getItem('design_bg') || '');
   const [showBgInput, setShowBgInput] = useState(false);
   const [dragCardStatus, setDragCardStatus] = useState(null);
-  const prevCardsRef = useRef([]);
+  const [showManageDesigners, setShowManageDesigners] = useState(false);
+  const [newDesigner, setNewDesigner] = useState({ name: '', email: '', password: '' });
   const [newCard, setNewCard] = useState({ title: '', expert_name: '', delivery_type: '', priority: 'normal', designer_id: '', start_date: '', deadline: '', estimated_hours: '', description: '' });
 
   const loadCards = useCallback(async () => {
@@ -47,45 +49,17 @@ export default function DesignBoardPage() {
       const params = {};
       if (filterDesigner) params.designer_id = filterDesigner;
       const list = await designApi.cards(params);
-
-      // Detectar notificacoes comparando com estado anterior
-      const prev = prevCardsRef.current;
-      if (prev.length > 0) {
-        const newNotifs = [];
-        list.forEach(c => {
-          const old = prev.find(p => p.id === c.id);
-          if (!old) return;
-          // Card entrou em analise -> notificar admin
-          if (old.status !== 'analise' && c.status === 'analise' && isDesignAdmin) {
-            newNotifs.push({ id: Date.now() + c.id, text: `"${c.title}" enviado para analise por ${c.designer_name}`, time: new Date(), type: 'analise' });
-          }
-          // Card entrou em alteracoes -> notificar editor responsavel
-          if (old.status !== 'alteracoes' && c.status === 'alteracoes' && !isDesignAdmin && c.designer_id === user?.id) {
-            newNotifs.push({ id: Date.now() + c.id, text: `"${c.title}" precisa de alteracoes`, time: new Date(), type: 'alteracoes' });
-          }
-        });
-        if (newNotifs.length > 0) setNotifications(n => [...newNotifs, ...n].slice(0, 50));
-      }
-
-      // Detectar cards perto do deadline (24h)
-      const now = new Date();
-      const deadlineNotifs = list
-        .filter(c => c.deadline && c.status !== 'concluidas')
-        .filter(c => {
-          const dl = new Date(c.deadline);
-          const diff = dl - now;
-          return diff > 0 && diff < 24 * 60 * 60 * 1000;
-        })
-        .map(c => ({ id: 'dl_' + c.id, text: `"${c.title}" vence em menos de 24h`, time: new Date(), type: 'deadline' }));
-
-      if (deadlineNotifs.length > 0 && prev.length === 0) {
-        setNotifications(n => [...deadlineNotifs, ...n].slice(0, 50));
-      }
-
-      prevCardsRef.current = list;
       setCards(list);
     } catch { /* ignore */ }
-  }, [filterDesigner, isDesignAdmin, user?.id]);
+  }, [filterDesigner]);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const [notifs, count] = await Promise.all([designApi.notifications(), designApi.unreadCount()]);
+      setNotifications(notifs);
+      setUnreadCount(count.count);
+    } catch { /* ignore */ }
+  }, []);
 
   const loadMeta = useCallback(async () => {
     try {
@@ -100,16 +74,37 @@ export default function DesignBoardPage() {
 
   useEffect(() => { loadCards(); }, [loadCards]);
   useEffect(() => { loadMeta(); }, [loadMeta]);
-  // Poll a cada 15s para detectar mudancas e notificar
+  useEffect(() => { loadNotifications(); }, [loadNotifications]);
+  // Poll a cada 15s
   useEffect(() => {
-    const interval = setInterval(loadCards, 15000);
+    const interval = setInterval(() => { loadCards(); loadNotifications(); }, 15000);
     return () => clearInterval(interval);
-  }, [loadCards]);
+  }, [loadCards, loadNotifications]);
+
+  const handleMarkAllRead = async () => {
+    await designApi.readAllNotifications();
+    setUnreadCount(0);
+    setNotifications(n => n.map(x => ({ ...x, read: true })));
+  };
 
   const handleBgSave = (url) => {
     setBgImage(url);
     localStorage.setItem('design_bg', url);
     setShowBgInput(false);
+  };
+
+  const handleCreateDesigner = async (e) => {
+    e.preventDefault();
+    try {
+      await designApi.createDesigner(newDesigner);
+      setNewDesigner({ name: '', email: '', password: '' });
+      loadMeta();
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleToggleDesigner = async (id) => {
+    await designApi.toggleDesigner(id);
+    loadMeta();
   };
 
   const grouped = {};
@@ -174,7 +169,6 @@ export default function DesignBoardPage() {
 
   const formatDt = (d) => d ? new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
 
-  const unreadNotifs = notifications.length;
   const bgStyle = bgImage ? { backgroundImage: `url(${bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {};
 
   return (
@@ -197,22 +191,22 @@ export default function DesignBoardPage() {
         <div className={styles.headerRight}>
           {/* Notificacoes */}
           <div className={styles.notifWrap}>
-            <button className={styles.notifBtn} onClick={() => setShowNotifs(!showNotifs)}>
+            <button className={styles.notifBtn} onClick={() => { setShowNotifs(!showNotifs); if (!showNotifs) loadNotifications(); }}>
               <span>🔔</span>
-              {unreadNotifs > 0 && <span className={styles.notifBadge}>{unreadNotifs}</span>}
+              {unreadCount > 0 && <span className={styles.notifBadge}>{unreadCount}</span>}
             </button>
             {showNotifs && (
               <div className={styles.notifDropdown}>
                 <div className={styles.notifHeader}>
                   <span>Notificacoes</span>
-                  {notifications.length > 0 && <button className={styles.notifClear} onClick={() => setNotifications([])}>Limpar</button>}
+                  {unreadCount > 0 && <button className={styles.notifClear} onClick={handleMarkAllRead}>Marcar lidas</button>}
                 </div>
                 <div className={styles.notifList}>
                   {notifications.length === 0 && <p className={styles.notifEmpty}>Nenhuma notificacao.</p>}
                   {notifications.map(n => (
-                    <div key={n.id} className={`${styles.notifItem} ${styles[`notif_${n.type}`]}`}>
-                      <p>{n.text}</p>
-                      <span>{n.time.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                    <div key={n.id} className={`${styles.notifItem} ${styles[`notif_${n.type}`]} ${!n.read ? styles.notifUnread : ''}`}>
+                      <p>{n.message}</p>
+                      <span>{new Date(n.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</span>
                     </div>
                   ))}
                 </div>
@@ -230,6 +224,7 @@ export default function DesignBoardPage() {
               </button>
               <button className={styles.bgBtn} onClick={() => setShowBgInput(!showBgInput)} title="Plano de fundo">🖼</button>
               <button className={styles.btnGold} onClick={() => navigate('/design/analytics')}>📊 Analytics</button>
+              <button className={styles.btnGhost} onClick={() => setShowManageDesigners(!showManageDesigners)}>👥 Designers</button>
             </>
           )}
           <div className={styles.userInfo}>
@@ -272,6 +267,37 @@ export default function DesignBoardPage() {
           <textarea placeholder="Descricao" value={newCard.description} onChange={e => setNewCard(p => ({ ...p, description: e.target.value }))} rows={2} />
           <button type="submit" className={styles.btnGold}>Criar Card</button>
         </form>
+      )}
+
+      {/* Manage Designers */}
+      {showManageDesigners && (
+        <div className={styles.managePanel}>
+          <div className={styles.managePanelHeader}>
+            <h3>Gerenciar Designers</h3>
+            <button className={styles.logoutBtn} onClick={() => setShowManageDesigners(false)}>✕</button>
+          </div>
+          <form className={styles.addDesignerForm} onSubmit={handleCreateDesigner}>
+            <input placeholder="Nome" value={newDesigner.name} onChange={e => setNewDesigner(p => ({ ...p, name: e.target.value }))} required />
+            <input placeholder="Email" type="email" value={newDesigner.email} onChange={e => setNewDesigner(p => ({ ...p, email: e.target.value }))} required />
+            <input placeholder="Senha" type="password" value={newDesigner.password} onChange={e => setNewDesigner(p => ({ ...p, password: e.target.value }))} required minLength={6} />
+            <button type="submit" className={styles.btnGold}>+ Adicionar</button>
+          </form>
+          <div className={styles.designerList}>
+            {designers.map(d => (
+              <div key={d.id} className={styles.designerRow}>
+                <span className={styles.designerDot} style={{ background: d.role === 'design_admin' ? '#C9971A' : '#00b894' }} />
+                <span className={styles.designerName}>{d.name}</span>
+                <span className={styles.designerEmail}>{d.email}</span>
+                <span className={styles.designerRole}>{d.role === 'design_admin' ? 'Admin' : 'Editor'}</span>
+                {d.role === 'designer' && (
+                  <button className={`${styles.toggleBtn} ${d.active === false ? styles.toggleInactive : ''}`} onClick={() => handleToggleDesigner(d.id)}>
+                    {d.active === false ? 'Ativar' : 'Desativar'}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* Board */}

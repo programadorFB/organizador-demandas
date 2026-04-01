@@ -809,6 +809,11 @@ app.post('/api/design/cards', authMiddleware, roleMiddleware(...designAdmin), as
     );
     const card = result.rows[0];
     await pool.query('INSERT INTO design_history (card_id, user_id, action, to_status) VALUES ($1,$2,$3,$4)', [card.id, req.user.id, 'Card criado', card.status]);
+    // Notificar designer atribuído
+    if (card.designer_id && card.designer_id !== req.user.id) {
+      await pool.query('INSERT INTO design_notifications (user_id, card_id, message, type) VALUES ($1,$2,$3,$4)',
+        [card.designer_id, card.id, `Nova demanda atribuída: "${card.title}"`, 'nova']);
+    }
     res.status(201).json(card);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erro ao criar card' }); }
 });
@@ -858,6 +863,27 @@ app.patch('/api/design/cards/:id/move', authMiddleware, roleMiddleware(...design
     // Se tem comentário (ex: pedir alteração), salvar como comentário
     if (comment) {
       await pool.query('INSERT INTO design_comments (card_id, user_id, content) VALUES ($1,$2,$3)', [req.params.id, req.user.id, comment]);
+    }
+    // Notificações persistentes
+    const statusLabels = { links:'Links', demanda:'Demanda', em_andamento:'Em Andamento', analise:'Análise', alteracoes:'Alterações', concluidas:'Concluídas', pos_gestores:'Pós Gestores', reunioes:'Reuniões' };
+    // Notificar designer quando card é movido para ele (alterações, demanda, etc)
+    if (c.designer_id && c.designer_id !== req.user.id) {
+      const msg = status === 'alteracoes'
+        ? `"${c.title}" precisa de alterações${comment ? ': ' + comment : ''}`
+        : status === 'demanda'
+        ? `Nova demanda atribuída: "${c.title}"`
+        : `"${c.title}" foi movido para ${statusLabels[status] || status}`;
+      await pool.query('INSERT INTO design_notifications (user_id, card_id, message, type) VALUES ($1,$2,$3,$4)',
+        [c.designer_id, c.id, msg, status === 'alteracoes' ? 'alteracoes' : status === 'concluidas' ? 'aprovado' : 'movido']);
+    }
+    // Notificar admins quando card vai para análise
+    if (status === 'analise') {
+      const designerName = (await pool.query('SELECT name FROM users WHERE id=$1', [req.user.id])).rows[0]?.name || 'Designer';
+      const admins = await pool.query("SELECT id FROM users WHERE role IN ('admin','design_admin') AND id != $1", [req.user.id]);
+      for (const adm of admins.rows) {
+        await pool.query('INSERT INTO design_notifications (user_id, card_id, message, type) VALUES ($1,$2,$3,$4)',
+          [adm.id, c.id, `"${c.title}" enviado para revisão por ${designerName}`, 'analise']);
+      }
     }
     res.json(result.rows[0]);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erro ao mover card' }); }
@@ -920,6 +946,59 @@ app.get('/api/design/cards/:id/history', authMiddleware, roleMiddleware(...desig
       [req.params.id]
     );
     res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+// Notifications
+app.get('/api/design/notifications', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT * FROM design_notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50',
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+app.patch('/api/design/notifications/read-all', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    await pool.query('UPDATE design_notifications SET read = true WHERE user_id = $1', [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+app.get('/api/design/notifications/unread-count', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const result = await pool.query('SELECT COUNT(*)::int as count FROM design_notifications WHERE user_id = $1 AND read = false', [req.user.id]);
+    res.json({ count: result.rows[0].count });
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+// Manage designers (design_admin only)
+app.post('/api/design/designers', authMiddleware, roleMiddleware(...designAdmin), async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) return res.status(400).json({ error: 'Nome, email e senha obrigatórios' });
+    if (password.length < 6) return res.status(400).json({ error: 'Senha mínima: 6 caracteres' });
+    const exists = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    if (exists.rows.length) return res.status(409).json({ error: 'Email já cadastrado' });
+    const hash = await bcrypt.hash(password, 10);
+    const result = await pool.query(
+      'INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role, active',
+      [name, email, hash, 'designer']
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Erro ao criar designer' }); }
+});
+
+app.patch('/api/design/designers/:id/toggle-active', authMiddleware, roleMiddleware(...designAdmin), async (req, res) => {
+  try {
+    const result = await pool.query(
+      'UPDATE users SET active = NOT active, updated_at = NOW() WHERE id = $1 AND role = $2 RETURNING id, name, email, role, active',
+      [req.params.id, 'designer']
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Designer não encontrado' });
+    res.json(result.rows[0]);
   } catch (err) { res.status(500).json({ error: 'Erro' }); }
 });
 
