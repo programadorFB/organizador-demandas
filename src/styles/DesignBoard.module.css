@@ -201,7 +201,6 @@
 .btnGhost:hover { border-color: #555; color: #ccc; }
 
 /* Notifications */
-.notifWrap { position: relative; z-index: 9999; }
 .notifBtn {
   background: transparent; border: 1px solid #333; border-radius: 6px; padding: 0.3rem 0.5rem;
   font-size: 1rem; cursor: pointer; position: relative; transition: all 0.2s;
@@ -213,14 +212,13 @@
   border-radius: 50%; display: flex; align-items: center; justify-content: center;
   line-height: 1; padding: 0 3px;
 }
-.notifOverlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9998;
-}
+.notifPortal { position: fixed; inset: 0; z-index: 99999; }
+.notifOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); }
 .notifDropdown {
-  position: fixed; top: 50px; right: 20px; width: 380px;
-  background: #111; border: 1px solid #C9971A; border-radius: 12px;
-  box-shadow: 0 12px 50px rgba(0,0,0,0.7), 0 0 0 1px rgba(201,151,26,0.3); z-index: 9999; animation: slideDown 0.2s ease;
-  overflow: hidden;
+  position: fixed; top: 55px; right: 24px; width: 380px;
+  background: #111; border: 2px solid #C9971A; border-radius: 12px;
+  box-shadow: 0 16px 60px rgba(0,0,0,0.8), 0 0 30px rgba(201,151,26,0.15);
+  animation: slideDown 0.2s ease; overflow: hidden;
 }
 @keyframes slideDown { from { transform: translateY(-10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 .notifHeader {
