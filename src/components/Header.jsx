@@ -64,6 +64,11 @@ export default function Header() {
               {urgentCount > 0 && <span className={styles.badge}>{urgentCount}</span>}
             </NavLink>
           )}
+          {isAdmin && (
+            <NavLink to="/design/board" className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}>
+              Design Board
+            </NavLink>
+          )}
         </nav>
       </div>
       <div className={styles.right}>

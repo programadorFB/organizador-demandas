@@ -93,6 +93,8 @@ export default function ScrumPage() {
   const [showNewSprint, setShowNewSprint] = useState(false);
   const [newSprint, setNewSprint] = useState({ name: '', goal: '', start_date: '', end_date: '' });
   const [sprintDemands, setSprintDemands] = useState([]);
+  const [backlogDemands, setBacklogDemands] = useState([]);
+  const [selectedSprint, setSelectedSprint] = useState(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -110,11 +112,35 @@ export default function ScrumPage() {
         setBurndown(bd);
         setNotes(n);
         setSprintDemands(d);
+        setSelectedSprint(active.id);
       }
     } catch { /* ignore */ }
   }, []);
 
+  const loadBacklog = useCallback(async () => {
+    try {
+      const all = await demandsApi.list({});
+      setBacklogDemands(all.filter(d => !d.sprint_id && d.status !== 'concluido' && d.status !== 'cancelado'));
+    } catch { /* ignore */ }
+  }, []);
+
+  const loadSprintDemands = useCallback(async (sprintId) => {
+    if (!sprintId) { setSprintDemands([]); return; }
+    try {
+      const d = await demandsApi.list({ sprint_id: sprintId });
+      setSprintDemands(d);
+    } catch { /* ignore */ }
+  }, []);
+
+  const handleAssign = async (demandId, sprintId) => {
+    await demandsApi.assignSprint(demandId, sprintId);
+    await Promise.all([loadBacklog(), loadSprintDemands(selectedSprint)]);
+    loadData();
+  };
+
   useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { if (tab === 'backlog') loadBacklog(); }, [tab, loadBacklog]);
+  useEffect(() => { if (tab === 'backlog' && selectedSprint) loadSprintDemands(selectedSprint); }, [tab, selectedSprint, loadSprintDemands]);
 
   const handleCreateSprint = async (e) => {
     e.preventDefault();
@@ -213,9 +239,9 @@ export default function ScrumPage() {
 
         {/* Tabs */}
         <div className={styles.tabs}>
-          {['overview', 'notes', 'sprints'].map(t => (
+          {['overview', 'backlog', 'notes', 'sprints'].map(t => (
             <button key={t} className={`${styles.tab} ${tab === t ? styles.activeTab : ''}`} onClick={() => setTab(t)}>
-              {t === 'overview' ? 'Gráficos' : t === 'notes' ? 'Standups & Notas' : 'Todas as Sprints'}
+              {{ overview: 'Gráficos', backlog: 'Backlog & Sprint', notes: 'Standups & Notas', sprints: 'Todas as Sprints' }[t]}
             </button>
           ))}
         </div>
@@ -229,6 +255,75 @@ export default function ScrumPage() {
             <div className={styles.chartCard}>
               <h3>Velocity</h3>
               <VelocityChart data={velocity} />
+            </div>
+          </div>
+        )}
+
+        {tab === 'backlog' && (
+          <div className={styles.backlogSection}>
+            <div className={styles.sprintSelector}>
+              <label>Sprint destino:</label>
+              <select value={selectedSprint || ''} onChange={e => setSelectedSprint(e.target.value ? Number(e.target.value) : null)}>
+                <option value="">Selecione uma sprint</option>
+                {sprints.filter(s => s.status !== 'completed').map(s => (
+                  <option key={s.id} value={s.id}>{s.name} ({s.status})</option>
+                ))}
+              </select>
+            </div>
+            <div className={styles.backlogColumns}>
+              <div className={styles.backlogColumn}>
+                <div className={styles.columnHeader}>
+                  <h3>Backlog</h3>
+                  <span className={styles.columnCount}>{backlogDemands.length}</span>
+                </div>
+                <div className={styles.columnList}>
+                  {backlogDemands.map(d => (
+                    <div key={d.id} className={styles.demandItem}>
+                      <div className={styles.demandInfo}>
+                        <span className={`priority-badge priority-${d.priority}`}>{d.priority}</span>
+                        <span className={styles.demandTitle}>{d.title}</span>
+                        {d.story_points && <span className={styles.pointsBadge}>{d.story_points} pts</span>}
+                      </div>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        disabled={!selectedSprint}
+                        onClick={() => handleAssign(d.id, selectedSprint)}
+                        title={selectedSprint ? 'Adicionar à sprint' : 'Selecione uma sprint'}
+                      >→</button>
+                    </div>
+                  ))}
+                  {backlogDemands.length === 0 && <div className={styles.empty}>Nenhuma demanda no backlog.</div>}
+                </div>
+              </div>
+              <div className={styles.backlogColumn}>
+                <div className={styles.columnHeader}>
+                  <h3>Na Sprint</h3>
+                  <span className={styles.columnCount}>{sprintDemands.length}</span>
+                  {sprintDemands.length > 0 && (
+                    <span className={styles.totalPoints}>
+                      {sprintDemands.reduce((s, d) => s + (d.story_points || 0), 0)} pts
+                    </span>
+                  )}
+                </div>
+                <div className={styles.columnList}>
+                  {!selectedSprint && <div className={styles.empty}>Selecione uma sprint ao lado.</div>}
+                  {selectedSprint && sprintDemands.map(d => (
+                    <div key={d.id} className={styles.demandItem}>
+                      <button
+                        className="btn btn-danger btn-sm"
+                        onClick={() => handleAssign(d.id, null)}
+                        title="Remover da sprint"
+                      >←</button>
+                      <div className={styles.demandInfo}>
+                        <span className={`priority-badge priority-${d.priority}`}>{d.priority}</span>
+                        <span className={styles.demandTitle}>{d.title}</span>
+                        {d.story_points && <span className={styles.pointsBadge}>{d.story_points} pts</span>}
+                      </div>
+                    </div>
+                  ))}
+                  {selectedSprint && sprintDemands.length === 0 && <div className={styles.empty}>Nenhuma demanda nesta sprint.</div>}
+                </div>
+              </div>
             </div>
           </div>
         )}

@@ -4,8 +4,11 @@ import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import cors from 'cors';
-import { readFileSync } from 'fs';
+import { readFileSync, unlinkSync } from 'fs';
 import { exec } from 'child_process';
+import multer from 'multer';
+import path from 'path';
+import crypto from 'crypto';
 
 const app = express();
 const { Pool } = pg;
@@ -16,6 +19,20 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 app.use(cors());
 app.use(express.json());
+
+// Upload config
+const storage = multer.diskStorage({
+  destination: 'uploads/',
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `${Date.now()}_${crypto.randomBytes(8).toString('hex')}${ext}`);
+  }
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
+});
+app.use('/uploads', express.static('uploads'));
 
 // ─── Auth Middleware ───
 function authMiddleware(req, res, next) {
@@ -248,6 +265,22 @@ app.get('/api/demands/urgent/pending', authMiddleware, roleMiddleware('admin', '
   }
 });
 
+// Atrelar/desatrelar demanda de sprint (admin/supervisor)
+app.patch('/api/demands/:id/sprint', authMiddleware, roleMiddleware('admin', 'supervisor'), async (req, res) => {
+  try {
+    const { sprint_id } = req.body;
+    const result = await pool.query(
+      'UPDATE demands SET sprint_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [sprint_id || null, req.params.id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Demanda não encontrada' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Update sprint error:', err);
+    res.status(500).json({ error: 'Erro ao atrelar demanda à sprint' });
+  }
+});
+
 // Deletar demanda (admin)
 app.delete('/api/demands/:id', authMiddleware, roleMiddleware('admin'), async (req, res) => {
   try {
@@ -282,6 +315,55 @@ app.post('/api/demands/:id/comments', authMiddleware, async (req, res) => {
     res.status(201).json(result.rows[0]);
   } catch (err) {
     res.status(500).json({ error: 'Erro ao adicionar comentário' });
+  }
+});
+
+// ─── Attachments ───
+app.get('/api/demands/:id/attachments', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT a.*, u.name as user_name FROM demand_attachments a
+       JOIN users u ON a.user_id = u.id WHERE a.demand_id = $1 ORDER BY a.created_at DESC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao listar anexos' });
+  }
+});
+
+app.post('/api/demands/:id/attachments', authMiddleware, upload.array('files', 10), async (req, res) => {
+  try {
+    if (!req.files?.length) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    const results = [];
+    for (const file of req.files) {
+      const r = await pool.query(
+        `INSERT INTO demand_attachments (demand_id, user_id, filename, original_name, mime_type, size)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [req.params.id, req.user.id, file.filename, file.originalname, file.mimetype, file.size]
+      );
+      results.push(r.rows[0]);
+    }
+    res.status(201).json(results);
+  } catch (err) {
+    console.error('Upload error:', err);
+    res.status(500).json({ error: 'Erro ao fazer upload' });
+  }
+});
+
+app.delete('/api/attachments/:id', authMiddleware, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM demand_attachments WHERE id = $1', [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Anexo não encontrado' });
+    const attachment = result.rows[0];
+    if (attachment.user_id !== req.user.id && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Sem permissão' });
+    }
+    try { unlinkSync(`uploads/${attachment.filename}`); } catch {}
+    await pool.query('DELETE FROM demand_attachments WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao deletar anexo' });
   }
 });
 
@@ -331,7 +413,7 @@ app.get('/api/users', authMiddleware, roleMiddleware('admin', 'supervisor'), asy
 app.patch('/api/users/:id/role', authMiddleware, roleMiddleware('admin'), async (req, res) => {
   try {
     const { role } = req.body;
-    if (!['admin', 'supervisor', 'user'].includes(role)) {
+    if (!['admin', 'supervisor', 'user', 'designer', 'design_admin'].includes(role)) {
       return res.status(400).json({ error: 'Role inválida' });
     }
     const result = await pool.query(
@@ -673,6 +755,311 @@ app.delete('/api/scrum/notes/:id', authMiddleware, roleMiddleware('admin'), asyn
   } catch (err) {
     res.status(500).json({ error: 'Erro ao deletar nota' });
   }
+});
+
+// ─── Design Board ───
+const designAccess = ['admin', 'design_admin', 'designer'];
+const designAdmin = ['admin', 'design_admin'];
+
+// Designers list
+app.get('/api/design/designers', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const result = await pool.query("SELECT id, name, email, role FROM users WHERE role IN ('designer','design_admin') AND active = true ORDER BY name");
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: 'Erro ao listar designers' }); }
+});
+
+// Cards list
+app.get('/api/design/cards', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const { status, designer_id } = req.query;
+    let query = `
+      SELECT c.*, d.name as designer_name, cb.name as created_by_name,
+        (SELECT COUNT(*) FROM design_checklist WHERE card_id = c.id)::int as checklist_total,
+        (SELECT COUNT(*) FROM design_checklist WHERE card_id = c.id AND checked = true)::int as checklist_done,
+        (SELECT COUNT(*) FROM design_comments WHERE card_id = c.id)::int as comments_count
+      FROM design_cards c
+      LEFT JOIN users d ON c.designer_id = d.id
+      JOIN users cb ON c.created_by = cb.id
+      WHERE 1=1
+    `;
+    const params = [];
+    let idx = 1;
+    // Designers only see their own cards in their visible columns
+    if (req.user.role === 'designer') {
+      query += ` AND c.designer_id = $${idx++}`; params.push(req.user.id);
+      query += ` AND c.status IN ('links', 'demanda', 'em_andamento', 'alteracoes')`;
+    }
+    if (status) { query += ` AND c.status = $${idx++}`; params.push(status); }
+    if (designer_id) { query += ` AND c.designer_id = $${idx++}`; params.push(designer_id); }
+    query += ` ORDER BY c.created_at DESC`;
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Erro ao listar cards' }); }
+});
+
+// Create card
+app.post('/api/design/cards', authMiddleware, roleMiddleware(...designAdmin), async (req, res) => {
+  try {
+    const { title, expert_name, description, delivery_type, priority, status, designer_id, start_date, deadline, estimated_hours } = req.body;
+    const result = await pool.query(
+      `INSERT INTO design_cards (title, expert_name, description, delivery_type, priority, status, designer_id, start_date, deadline, estimated_hours, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
+      [title, expert_name, description, delivery_type || null, priority || 'normal', status || 'demanda', designer_id || null, start_date || null, deadline || null, estimated_hours || null, req.user.id]
+    );
+    const card = result.rows[0];
+    await pool.query('INSERT INTO design_history (card_id, user_id, action, to_status) VALUES ($1,$2,$3,$4)', [card.id, req.user.id, 'Card criado', card.status]);
+    res.status(201).json(card);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Erro ao criar card' }); }
+});
+
+// Update card
+app.put('/api/design/cards/:id', authMiddleware, roleMiddleware(...designAdmin), async (req, res) => {
+  try {
+    const { title, expert_name, description, delivery_type, priority, designer_id, start_date, deadline, estimated_hours } = req.body;
+    const result = await pool.query(
+      `UPDATE design_cards SET title=$1, expert_name=$2, description=$3, delivery_type=$4, priority=$5, designer_id=$6, start_date=$7, deadline=$8, estimated_hours=$9, updated_at=NOW()
+       WHERE id=$10 RETURNING *`,
+      [title, expert_name, description, delivery_type, priority, designer_id, start_date, deadline, estimated_hours, req.params.id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Card não encontrado' });
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: 'Erro ao atualizar card' }); }
+});
+
+// Delete card
+app.delete('/api/design/cards/:id', authMiddleware, roleMiddleware(...designAdmin), async (req, res) => {
+  try {
+    await pool.query('DELETE FROM design_cards WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Erro ao deletar card' }); }
+});
+
+// Move card (status change)
+app.patch('/api/design/cards/:id/move', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const { status, comment } = req.body;
+    const card = await pool.query('SELECT * FROM design_cards WHERE id = $1', [req.params.id]);
+    if (!card.rows.length) return res.status(404).json({ error: 'Card não encontrado' });
+    const c = card.rows[0];
+    // Designer: validar transições permitidas
+    if (req.user.role === 'designer') {
+      if (c.designer_id !== req.user.id) return res.status(403).json({ error: 'Não é seu card' });
+      const allowed = { demanda: ['em_andamento'], em_andamento: ['analise'], alteracoes: ['analise'] };
+      if (!allowed[c.status]?.includes(status)) {
+        return res.status(403).json({ error: 'Movimento não permitido' });
+      }
+    }
+    const result = await pool.query('UPDATE design_cards SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *', [status, req.params.id]);
+    // Registrar histórico
+    const actionLabel = status === 'analise' ? 'Enviado para revisão' : status === 'alteracoes' ? 'Alteração solicitada' : status === 'concluidas' ? 'Aprovado' : `Movido para ${status}`;
+    await pool.query('INSERT INTO design_history (card_id, user_id, action, from_status, to_status, details) VALUES ($1,$2,$3,$4,$5,$6)',
+      [req.params.id, req.user.id, actionLabel, c.status, status, comment || null]);
+    // Se tem comentário (ex: pedir alteração), salvar como comentário
+    if (comment) {
+      await pool.query('INSERT INTO design_comments (card_id, user_id, content) VALUES ($1,$2,$3)', [req.params.id, req.user.id, comment]);
+    }
+    res.json(result.rows[0]);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Erro ao mover card' }); }
+});
+
+// Checklist
+app.get('/api/design/cards/:id/checklist', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM design_checklist WHERE card_id = $1 ORDER BY section NULLS FIRST, sort_order, id', [req.params.id]);
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+app.post('/api/design/cards/:id/checklist', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const { text, section } = req.body;
+    const result = await pool.query('INSERT INTO design_checklist (card_id, text, section) VALUES ($1,$2,$3) RETURNING *', [req.params.id, text, section || null]);
+    res.status(201).json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+app.patch('/api/design/checklist/:id/toggle', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const result = await pool.query('UPDATE design_checklist SET checked = NOT checked WHERE id = $1 RETURNING *', [req.params.id]);
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+app.delete('/api/design/checklist/:id', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    await pool.query('DELETE FROM design_checklist WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+// Comments
+app.get('/api/design/cards/:id/comments', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT c.*, u.name as user_name FROM design_comments c JOIN users u ON c.user_id = u.id WHERE c.card_id = $1 ORDER BY c.created_at ASC',
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+app.post('/api/design/cards/:id/comments', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const { content } = req.body;
+    const result = await pool.query('INSERT INTO design_comments (card_id, user_id, content) VALUES ($1,$2,$3) RETURNING *', [req.params.id, req.user.id, content]);
+    res.status(201).json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+// History
+app.get('/api/design/cards/:id/history', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT h.*, u.name as user_name FROM design_history h JOIN users u ON h.user_id = u.id WHERE h.card_id = $1 ORDER BY h.created_at DESC',
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+// Design Attachments
+app.get('/api/design/cards/:id/attachments', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT a.*, u.name as user_name FROM design_attachments a
+       JOIN users u ON a.user_id = u.id WHERE a.card_id = $1 ORDER BY a.created_at DESC`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: 'Erro ao listar anexos' }); }
+});
+
+app.post('/api/design/cards/:id/attachments', authMiddleware, roleMiddleware(...designAccess), upload.array('files', 10), async (req, res) => {
+  try {
+    if (!req.files?.length) return res.status(400).json({ error: 'Nenhum arquivo enviado' });
+    const results = [];
+    for (const file of req.files) {
+      const r = await pool.query(
+        `INSERT INTO design_attachments (card_id, user_id, filename, original_name, mime_type, size)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [req.params.id, req.user.id, file.filename, file.originalname, file.mimetype, file.size]
+      );
+      results.push(r.rows[0]);
+    }
+    res.status(201).json(results);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Erro ao fazer upload' }); }
+});
+
+app.delete('/api/design/attachments/:id', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM design_attachments WHERE id = $1', [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Anexo não encontrado' });
+    const att = result.rows[0];
+    if (att.user_id !== req.user.id && !designAdmin.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Sem permissão' });
+    }
+    try { unlinkSync(`uploads/${att.filename}`); } catch {}
+    await pool.query('DELETE FROM design_attachments WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Erro ao deletar anexo' }); }
+});
+
+// Stats
+app.get('/api/design/stats', authMiddleware, roleMiddleware(...designAdmin), async (req, res) => {
+  try {
+    const total = await pool.query("SELECT COUNT(*)::int as c FROM design_cards WHERE status NOT IN ('concluidas')");
+    const done = await pool.query("SELECT COUNT(*)::int as c FROM design_cards WHERE status = 'concluidas'");
+    const overdue = await pool.query("SELECT COUNT(*)::int as c FROM design_cards WHERE deadline < NOW() AND status NOT IN ('concluidas') AND deadline IS NOT NULL");
+    const urgent = await pool.query("SELECT COUNT(*)::int as c FROM design_cards WHERE priority = 'urgente' AND status NOT IN ('concluidas')");
+    const inAnalise = await pool.query("SELECT COUNT(*)::int as c FROM design_cards WHERE status = 'analise'");
+    res.json({
+      active: total.rows[0].c,
+      done: done.rows[0].c,
+      overdue: overdue.rows[0].c,
+      urgent: urgent.rows[0].c,
+      inAnalise: inAnalise.rows[0].c,
+    });
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+// Analytics (admin only)
+app.get('/api/design/analytics', authMiddleware, roleMiddleware(...designAdmin), async (req, res) => {
+  try {
+    // Produtividade por designer — cards concluidos e tempo medio
+    const perDesigner = await pool.query(`
+      SELECT u.id, u.name,
+        COUNT(c.id)::int as total_cards,
+        COUNT(CASE WHEN c.status = 'concluidas' THEN 1 END)::int as completed,
+        COUNT(CASE WHEN c.status NOT IN ('concluidas') THEN 1 END)::int as active,
+        COUNT(CASE WHEN c.deadline < NOW() AND c.status NOT IN ('concluidas') AND c.deadline IS NOT NULL THEN 1 END)::int as overdue,
+        COALESCE(ROUND(AVG(CASE WHEN c.status = 'concluidas' AND c.updated_at IS NOT NULL
+          THEN EXTRACT(EPOCH FROM (c.updated_at - c.created_at)) / 3600 END)::numeric, 1), 0) as avg_hours_to_complete,
+        COALESCE(SUM(c.estimated_hours) FILTER (WHERE c.status = 'concluidas'), 0)::numeric(10,1) as total_estimated_hours
+      FROM users u
+      LEFT JOIN design_cards c ON c.designer_id = u.id
+      WHERE u.role IN ('designer', 'design_admin') AND u.active = true
+      GROUP BY u.id, u.name ORDER BY completed DESC
+    `);
+
+    // Cards concluidos por semana (ultimas 8 semanas)
+    const weeklyOutput = await pool.query(`
+      SELECT DATE_TRUNC('week', c.updated_at)::date as week,
+        COUNT(*)::int as count,
+        u.name as designer_name
+      FROM design_cards c
+      JOIN users u ON c.designer_id = u.id
+      WHERE c.status = 'concluidas' AND c.updated_at >= NOW() - INTERVAL '8 weeks'
+      GROUP BY week, u.name ORDER BY week
+    `);
+
+    // Distribuicao por status
+    const byStatus = await pool.query(`
+      SELECT status, COUNT(*)::int as count FROM design_cards GROUP BY status ORDER BY count DESC
+    `);
+
+    // Distribuicao por prioridade
+    const byPriority = await pool.query(`
+      SELECT priority, COUNT(*)::int as count FROM design_cards WHERE status NOT IN ('concluidas') GROUP BY priority
+    `);
+
+    // Distribuicao por tipo de entrega
+    const byType = await pool.query(`
+      SELECT COALESCE(delivery_type, 'Sem tipo') as delivery_type, COUNT(*)::int as count
+      FROM design_cards GROUP BY delivery_type ORDER BY count DESC
+    `);
+
+    // Quantidade de alteracoes (retrabalho) por designer
+    const rework = await pool.query(`
+      SELECT u.name, COUNT(*)::int as alteracoes
+      FROM design_history h
+      JOIN design_cards c ON h.card_id = c.id
+      JOIN users u ON c.designer_id = u.id
+      WHERE h.to_status = 'alteracoes'
+      GROUP BY u.name ORDER BY alteracoes DESC
+    `);
+
+    // Top 5 cards mais lentos (concluidos)
+    const slowest = await pool.query(`
+      SELECT c.title, u.name as designer_name,
+        ROUND(EXTRACT(EPOCH FROM (c.updated_at - c.created_at)) / 3600)::int as hours_taken,
+        c.estimated_hours
+      FROM design_cards c
+      LEFT JOIN users u ON c.designer_id = u.id
+      WHERE c.status = 'concluidas' AND c.updated_at IS NOT NULL
+      ORDER BY (c.updated_at - c.created_at) DESC LIMIT 5
+    `);
+
+    res.json({
+      perDesigner: perDesigner.rows,
+      weeklyOutput: weeklyOutput.rows,
+      byStatus: byStatus.rows,
+      byPriority: byPriority.rows,
+      byType: byType.rows,
+      rework: rework.rows,
+      slowest: slowest.rows,
+    });
+  } catch (err) { console.error('Analytics error:', err); res.status(500).json({ error: 'Erro ao gerar analytics' }); }
 });
 
 // ─── Serve static in production ───

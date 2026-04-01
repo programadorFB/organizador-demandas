@@ -182,6 +182,16 @@
   font-size: 0.95rem;
 }
 
+/* Upload / Anexos */
+.uploadArea { display: flex; flex-direction: column; gap: 0.6rem; }
+.uploadBtn { cursor: pointer; display: inline-block; }
+.fileList { display: flex; flex-direction: column; gap: 0.35rem; }
+.fileItem { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.7rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.fileName { font-size: 0.85rem; font-weight: 500; color: var(--text-primary); flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fileSize { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; }
+.fileRemove { background: transparent; color: var(--text-muted); font-size: 0.8rem; padding: 0.2rem 0.4rem; border-radius: 4px; }
+.fileRemove:hover { background: rgba(255,71,87,0.1); color: var(--priority-urgente); }
+
 @media (max-width: 600px) {
   .row, .priorityGrid { grid-template-columns: 1fr; }
   .container { padding: 1rem; }

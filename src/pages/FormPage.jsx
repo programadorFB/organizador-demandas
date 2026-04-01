@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { demands as demandsApi } from '../services/api';
+import { demands as demandsApi, attachments as attachApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import styles from '../styles/FormPage.module.css';
 
@@ -28,21 +28,38 @@ export default function FormPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [files, setFiles] = useState([]);
 
   const set = (field) => (e) => setForm(prev => ({ ...prev, [field]: e.target.value }));
+
+  const handleFiles = (e) => {
+    setFiles(prev => [...prev, ...Array.from(e.target.files)]);
+    e.target.value = '';
+  };
+  const removeFile = (idx) => setFiles(prev => prev.filter((_, i) => i !== idx));
+
+  const formatSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await demandsApi.create({
+      const demand = await demandsApi.create({
         ...form,
         story_points: form.story_points ? parseInt(form.story_points) : null,
         due_date: form.due_date || null,
       });
+      if (files.length > 0) {
+        await attachApi.upload(demand.id, files);
+      }
       setSuccess(true);
       setForm(INITIAL);
+      setFiles([]);
       setTimeout(() => setSuccess(false), 4000);
     } catch (err) {
       setError(err.message);
@@ -131,6 +148,30 @@ export default function FormPage() {
             <div className={styles.field} style={{ maxWidth: 250 }}>
               <label>Data Desejada de Entrega</label>
               <input type="date" value={form.due_date} onChange={set('due_date')} />
+            </div>
+          </div>
+
+          <div className={styles.section}>
+            <h2>Anexos</h2>
+            <div className={styles.field}>
+              <label>Arquivos (imagens, PDFs, vídeos, documentos — máx 50MB cada)</label>
+              <div className={styles.uploadArea}>
+                <label className={styles.uploadBtn}>
+                  <input type="file" multiple onChange={handleFiles} style={{ display: 'none' }} />
+                  <span className="btn btn-ghost btn-sm">+ Selecionar Arquivos</span>
+                </label>
+                {files.length > 0 && (
+                  <div className={styles.fileList}>
+                    {files.map((f, i) => (
+                      <div key={i} className={styles.fileItem}>
+                        <span className={styles.fileName}>{f.name}</span>
+                        <span className={styles.fileSize}>{formatSize(f.size)}</span>
+                        <button type="button" className={styles.fileRemove} onClick={() => removeFile(i)}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

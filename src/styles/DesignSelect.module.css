@@ -1,0 +1,61 @@
+.container {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(201,151,26,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgba(201,151,26,0.04) 0%, transparent 50%),
+    #080808;
+}
+.wrapper { text-align: center; width: 100%; max-width: 520px; padding: 2rem; }
+
+.brand { margin-bottom: 2.5rem; }
+.brand h1 { font-size: 2.2rem; font-weight: 800; letter-spacing: 0.15em; color: #C9971A; }
+.brand p { font-size: 0.9rem; color: #777; letter-spacing: 0.08em; text-transform: uppercase; margin-top: 0.3rem; }
+
+.profileGrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 2rem; }
+
+.profileCard {
+  display: flex; flex-direction: column; align-items: center; gap: 0.5rem;
+  padding: 1.2rem 0.5rem; background: #111; border: 2px solid #222; border-radius: 12px;
+  cursor: pointer; transition: all 0.2s ease;
+}
+.profileCard:hover { border-color: #C9971A; background: #151510; transform: translateY(-2px); }
+.profileActive { border-color: #C9971A !important; background: rgba(201,151,26,0.08) !important; box-shadow: 0 0 20px rgba(201,151,26,0.15); }
+
+.avatar {
+  width: 52px; height: 52px; border-radius: 50%;
+  background: linear-gradient(135deg, #C9971A 0%, #a07a10 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem; font-weight: 800; color: #080808; letter-spacing: 0.02em;
+}
+.profileName { font-size: 0.95rem; font-weight: 700; color: #e8e8f0; }
+.profileRole { font-size: 0.7rem; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.05em; }
+
+.loginForm {
+  display: flex; flex-direction: column; align-items: center; gap: 0.7rem;
+  animation: fadeIn 0.25s ease;
+}
+.loginLabel { font-size: 0.9rem; color: #888; }
+.loginLabel strong { color: #C9971A; }
+
+.loginForm input {
+  width: 100%; max-width: 280px; padding: 0.75rem 1rem; text-align: center;
+  background: #111; border: 1px solid #333; border-radius: 8px;
+  color: #e8e8f0; font-size: 0.95rem;
+}
+.loginForm input:focus { border-color: #C9971A; box-shadow: 0 0 0 3px rgba(201,151,26,0.15); outline: none; }
+
+.loginBtn {
+  padding: 0.7rem 2.5rem; background: #C9971A; color: #080808; font-weight: 700;
+  font-size: 0.9rem; border-radius: 8px; border: none; cursor: pointer; transition: all 0.2s;
+}
+.loginBtn:hover { background: #d4a82b; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(201,151,26,0.3); }
+.loginBtn:disabled { opacity: 0.6; }
+
+.error { color: #ff4757; font-size: 0.82rem; font-weight: 500; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+@media (max-width: 500px) { .profileGrid { grid-template-columns: repeat(2, 1fr); } }

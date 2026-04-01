@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { demands as demandsApi, comments as commentsApi, users as usersApi, scrum as scrumApi } from '../services/api';
+import { demands as demandsApi, comments as commentsApi, users as usersApi, scrum as scrumApi, attachments as attachApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import styles from '../styles/DemandModal.module.css';
 
@@ -26,9 +26,14 @@ export default function DemandModal({ demand, onClose, onUpdate }) {
   const [selectedSprint, setSelectedSprint] = useState(demand.sprint_id || '');
   const [assignTo, setAssignTo] = useState(demand.assigned_to || '');
   const [urgentNote, setUrgentNote] = useState('');
+  const [attachList, setAttachList] = useState([]);
+  const [uploading, setUploading] = useState(false);
+
+  const loadAttachments = () => attachApi.list(demand.id).then(setAttachList).catch(() => {});
 
   useEffect(() => {
     commentsApi.list(demand.id).then(setComments).catch(() => {});
+    loadAttachments();
     if (canManage) {
       usersApi.list().then(setUsersList).catch(() => {});
       scrumApi.sprints().then(setSprintsList).catch(() => {});
@@ -73,9 +78,46 @@ export default function DemandModal({ demand, onClose, onUpdate }) {
     onClose();
   };
 
+  const handleUploadFiles = async (e) => {
+    const files = Array.from(e.target.files);
+    if (!files.length) return;
+    setUploading(true);
+    try {
+      await attachApi.upload(demand.id, files);
+      await loadAttachments();
+    } catch (err) {
+      console.error('Upload error:', err);
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleDeleteAttach = async (id) => {
+    await attachApi.delete(id);
+    await loadAttachments();
+  };
+
   const isUrgentPending = demand.priority === 'urgente' && demand.urgent_approved === null;
 
   const formatDate = (d) => d ? new Date(d).toLocaleDateString('pt-BR') : '—';
+
+  const formatSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const isImage = (mime) => mime?.startsWith('image/');
+  const isPdf = (mime) => mime === 'application/pdf';
+  const isVideo = (mime) => mime?.startsWith('video/');
+
+  const getFileIcon = (mime) => {
+    if (isImage(mime)) return '🖼';
+    if (isPdf(mime)) return '📄';
+    if (isVideo(mime)) return '🎬';
+    return '📎';
+  };
 
   return (
     <div className={styles.overlay} onClick={onClose}>
@@ -202,6 +244,44 @@ export default function DemandModal({ demand, onClose, onUpdate }) {
               </div>
             </div>
           )}
+
+          {/* Attachments */}
+          <div className={styles.sectionBlock}>
+            <h3>Anexos ({attachList.length})</h3>
+            {attachList.length > 0 && (
+              <div className={styles.attachGrid}>
+                {attachList.map(a => (
+                  <div key={a.id} className={styles.attachItem}>
+                    {isImage(a.mime_type) ? (
+                      <a href={`/uploads/${a.filename}`} target="_blank" rel="noreferrer" className={styles.attachThumb}>
+                        <img src={`/uploads/${a.filename}`} alt={a.original_name} />
+                      </a>
+                    ) : isVideo(a.mime_type) ? (
+                      <video src={`/uploads/${a.filename}`} controls className={styles.attachVideo} />
+                    ) : (
+                      <a href={`/uploads/${a.filename}`} target="_blank" rel="noreferrer" className={styles.attachFile}>
+                        <span className={styles.attachIcon}>{getFileIcon(a.mime_type)}</span>
+                      </a>
+                    )}
+                    <div className={styles.attachInfo}>
+                      <a href={`/uploads/${a.filename}`} target="_blank" rel="noreferrer" className={styles.attachName}>{a.original_name}</a>
+                      <span className={styles.attachMeta}>{formatSize(a.size)} — {a.user_name}</span>
+                    </div>
+                    {(a.user_id === demand.requester_id || isAdmin) && (
+                      <button className={styles.attachDelete} onClick={() => handleDeleteAttach(a.id)} title="Remover">✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {attachList.length === 0 && <p className={styles.noComments}>Nenhum anexo.</p>}
+            <div className={styles.attachUpload}>
+              <label className={styles.uploadLabel}>
+                <input type="file" multiple onChange={handleUploadFiles} style={{ display: 'none' }} />
+                <span className="btn btn-ghost btn-sm">{uploading ? 'Enviando...' : '+ Adicionar Anexo'}</span>
+              </label>
+            </div>
+          </div>
 
           {/* Comments */}
           <div className={styles.sectionBlock}>

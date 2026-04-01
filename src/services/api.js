@@ -34,6 +34,27 @@ export const demands = {
   queue: () => request('/demands/queue'),
   urgentPending: () => request('/demands/urgent/pending'),
   delete: (id) => request(`/demands/${id}`, { method: 'DELETE' }),
+  assignSprint: (id, sprint_id) => request(`/demands/${id}/sprint`, { method: 'PATCH', body: JSON.stringify({ sprint_id }) }),
+};
+
+// Attachments
+export const attachments = {
+  list: (demandId) => request(`/demands/${demandId}/attachments`),
+  upload: async (demandId, files) => {
+    const form = new FormData();
+    files.forEach(f => form.append('files', f));
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/demands/${demandId}/attachments`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro no upload');
+    return data;
+  },
+  delete: (id) => request(`/attachments/${id}`, { method: 'DELETE' }),
+  url: (filename) => `${API}/../uploads/${filename}`,
 };
 
 // Comments
@@ -90,4 +111,41 @@ export const scrum = {
   notes: (sprintId, type) => request(`/scrum/sprints/${sprintId}/notes${type ? `?type=${type}` : ''}`),
   addNote: (sprintId, type, content) => request(`/scrum/sprints/${sprintId}/notes`, { method: 'POST', body: JSON.stringify({ type, content }) }),
   deleteNote: (id) => request(`/scrum/notes/${id}`, { method: 'DELETE' }),
+};
+
+// Design Board
+export const design = {
+  cards: (params = {}) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+    return request(`/design/cards${qs ? `?${qs}` : ''}`);
+  },
+  createCard: (body) => request('/design/cards', { method: 'POST', body: JSON.stringify(body) }),
+  updateCard: (id, body) => request(`/design/cards/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteCard: (id) => request(`/design/cards/${id}`, { method: 'DELETE' }),
+  moveCard: (id, status, comment) => request(`/design/cards/${id}/move`, { method: 'PATCH', body: JSON.stringify({ status, comment }) }),
+  checklist: (cardId) => request(`/design/cards/${cardId}/checklist`),
+  addCheckItem: (cardId, text, section) => request(`/design/cards/${cardId}/checklist`, { method: 'POST', body: JSON.stringify({ text, section: section || null }) }),
+  toggleCheckItem: (id) => request(`/design/checklist/${id}/toggle`, { method: 'PATCH' }),
+  deleteCheckItem: (id) => request(`/design/checklist/${id}`, { method: 'DELETE' }),
+  comments: (cardId) => request(`/design/cards/${cardId}/comments`),
+  addComment: (cardId, content) => request(`/design/cards/${cardId}/comments`, { method: 'POST', body: JSON.stringify({ content }) }),
+  history: (cardId) => request(`/design/cards/${cardId}/history`),
+  stats: () => request('/design/stats'),
+  analytics: () => request('/design/analytics'),
+  designers: () => request('/design/designers'),
+  attachments: (cardId) => request(`/design/cards/${cardId}/attachments`),
+  uploadAttachments: async (cardId, files) => {
+    const form = new FormData();
+    files.forEach(f => form.append('files', f));
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/design/cards/${cardId}/attachments`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro no upload');
+    return data;
+  },
+  deleteAttachment: (id) => request(`/design/attachments/${id}`, { method: 'DELETE' }),
 };

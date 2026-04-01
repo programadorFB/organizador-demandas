@@ -1,0 +1,109 @@
+.page {
+  min-height: 100vh; background:
+    radial-gradient(ellipse at 20% 0%, rgba(201,151,26,0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 100%, rgba(201,151,26,0.03) 0%, transparent 50%),
+    #080808;
+  display: flex; flex-direction: column;
+}
+
+/* Header */
+.header {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 0.7rem 1.2rem; background: #0c0c0c; border-bottom: 1px solid #1a1a1a; flex-wrap: wrap;
+}
+.headerLeft { display: flex; align-items: center; gap: 0.8rem; }
+.logo { font-size: 1.1rem; font-weight: 800; letter-spacing: 0.12em; color: #C9971A; }
+.subtitle { font-size: 0.72rem; color: #555; text-transform: uppercase; letter-spacing: 0.06em; }
+.headerRight { display: flex; align-items: center; gap: 0.6rem; }
+.btnGhost { padding: 0.4rem 0.8rem; background: transparent; border: 1px solid #333; border-radius: 6px; color: #999; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+.btnGhost:hover { border-color: #C9971A; color: #C9971A; }
+.userInfo { display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: #888; }
+.logoutBtn { background: transparent; color: #666; font-size: 0.78rem; padding: 0.3rem 0.5rem; border-radius: 4px; }
+.logoutBtn:hover { color: #ff4757; }
+.loading { text-align: center; padding: 4rem; color: #555; font-size: 0.9rem; }
+
+/* Content */
+.content { flex: 1; padding: 1.5rem; max-width: 1200px; margin: 0 auto; width: 100%; }
+.sectionTitle { font-size: 0.85rem; font-weight: 700; color: #C9971A; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1rem; }
+
+/* Designer cards */
+.designerGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+.designerCard {
+  background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 12px; padding: 1.2rem;
+  display: flex; flex-direction: column; align-items: center; gap: 0.6rem;
+}
+.designerAvatar {
+  width: 48px; height: 48px; border-radius: 50%;
+  background: linear-gradient(135deg, #C9971A, #a07a10);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 0.9rem; font-weight: 800; color: #080808;
+}
+.designerCard h3 { font-size: 1rem; font-weight: 700; color: #e8e8f0; }
+.designerStats { display: flex; gap: 1.2rem; }
+.dStat { display: flex; flex-direction: column; align-items: center; }
+.dVal { font-size: 1.4rem; font-weight: 800; color: #e8e8f0; }
+.dLbl { font-size: 0.62rem; font-weight: 600; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+.dDanger .dVal { color: #ff4757; }
+
+.designerMeta { width: 100%; margin-top: 0.3rem; border-top: 1px solid #1a1a1a; padding-top: 0.5rem; }
+.metaRow { display: flex; justify-content: space-between; align-items: center; padding: 0.2rem 0; font-size: 0.78rem; }
+.metaRow span { color: #666; }
+.metaRow strong { color: #C9971A; }
+
+/* Charts grid */
+.chartsGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.chartCard {
+  background: #0d0d0d; border: 1px solid #1a1a1a; border-radius: 12px; padding: 1.2rem;
+}
+.chartCard h3 {
+  font-size: 0.78rem; font-weight: 700; color: #888; text-transform: uppercase;
+  letter-spacing: 0.04em; margin-bottom: 0.8rem; padding-bottom: 0.5rem; border-bottom: 1px solid #1a1a1a;
+}
+.empty { font-size: 0.82rem; color: #444; text-align: center; padding: 1.5rem; }
+
+/* SVG chart */
+.svgChart { width: 100%; height: auto; }
+
+/* Bar chart */
+.barChart { display: flex; flex-direction: column; gap: 0.5rem; }
+.barRow { display: flex; align-items: center; gap: 0.5rem; }
+.barLabel { font-size: 0.78rem; color: #999; min-width: 80px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.barTrack { flex: 1; height: 20px; background: #111; border-radius: 4px; overflow: hidden; }
+.barFill { height: 100%; border-radius: 4px; transition: width 0.4s ease; min-width: 2px; }
+.barVal { font-size: 0.78rem; font-weight: 700; color: #ccc; min-width: 24px; }
+
+/* Donut chart */
+.donutWrap { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; justify-content: center; }
+.donut {
+  width: 140px; height: 140px; border-radius: 50%; position: relative;
+  display: flex; align-items: center; justify-content: center;
+}
+.donutHole {
+  width: 80px; height: 80px; border-radius: 50%; background: #0d0d0d;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+.donutHole span { font-size: 1.4rem; font-weight: 800; color: #e8e8f0; }
+.donutHole small { font-size: 0.6rem; color: #555; text-transform: uppercase; }
+
+.donutLegend { display: flex; flex-direction: column; gap: 0.3rem; }
+.legendItem { display: flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: #999; }
+.legendDot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+.legendVal { margin-left: auto; font-weight: 600; color: #ccc; font-size: 0.75rem; }
+
+/* Slowest list */
+.slowList { display: flex; flex-direction: column; gap: 0.4rem; }
+.slowItem { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.6rem; background: #111; border-radius: 6px; }
+.slowRank { font-size: 0.85rem; font-weight: 800; color: #C9971A; min-width: 28px; text-align: center; }
+.slowInfo { flex: 1; min-width: 0; }
+.slowTitle { font-size: 0.82rem; font-weight: 500; color: #ccc; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.slowMeta { font-size: 0.68rem; color: #555; }
+.slowTime { font-size: 1rem; font-weight: 800; color: #ff6b35; }
+
+@media (max-width: 900px) {
+  .chartsGrid { grid-template-columns: 1fr; }
+  .designerGrid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 550px) {
+  .designerGrid { grid-template-columns: 1fr; }
+  .donutWrap { flex-direction: column; }
+}

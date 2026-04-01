@@ -11,13 +11,17 @@ import AdminPage from './pages/AdminPage';
 import ToolsPage from './pages/ToolsPage';
 import DashboardsPage from './pages/DashboardsPage';
 import ScrumPage from './pages/ScrumPage';
+import DesignSelectPage from './pages/DesignSelectPage';
+import DesignBoardPage from './pages/DesignBoardPage';
+import DesignAnalyticsPage from './pages/DesignAnalyticsPage';
 
 function AppRoutes() {
   const { user } = useAuth();
+  const isDesignUser = user && ['designer', 'design_admin'].includes(user.role);
 
   return (
     <>
-      {user && <Header />}
+      {user && !isDesignUser && <Header />}
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
         <Route path="/register" element={user ? <Navigate to="/" replace /> : <RegisterPage />} />
@@ -42,9 +46,21 @@ function AppRoutes() {
         <Route path="/admin" element={
           <ProtectedRoute roles={['admin']}><AdminPage /></ProtectedRoute>
         } />
+        {/* Design Board */}
+        <Route path="/design" element={<DesignSelectPage />} />
+        <Route path="/design/board" element={
+          <ProtectedRoute roles={['admin', 'design_admin', 'designer']}><DesignBoardPage /></ProtectedRoute>
+        } />
+        <Route path="/design/analytics" element={
+          <ProtectedRoute roles={['admin', 'design_admin']}><DesignAnalyticsPage /></ProtectedRoute>
+        } />
         <Route path="/" element={
           <ProtectedRoute>
-            {user?.role === 'user' ? <Navigate to="/nova-demanda" replace /> : <Navigate to="/board" replace />}
+            {user?.role === 'designer' || user?.role === 'design_admin'
+              ? <Navigate to="/design/board" replace />
+              : user?.role === 'user'
+              ? <Navigate to="/nova-demanda" replace />
+              : <Navigate to="/board" replace />}
           </ProtectedRoute>
         } />
         <Route path="*" element={<Navigate to="/" replace />} />
