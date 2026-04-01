@@ -1,5 +1,5 @@
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const GOLD = [201, 151, 26];
 const DARK = [8, 8, 8];
@@ -92,7 +92,7 @@ export default function generateReport(data) {
   y += 10;
 
   // Table
-  doc.autoTable({
+  autoTable(doc, {
     startY: y,
     margin: { left: MARGIN, right: MARGIN },
     head: [['Designer', 'Concluídos', 'Ativos', 'Atrasados', 'Tempo Médio', 'Horas Entregues']],
@@ -295,7 +295,7 @@ export default function generateReport(data) {
   y += 5;
 
   if (data.slowest.length > 0) {
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       margin: { left: MARGIN, right: MARGIN },
       head: [['#', 'Card', 'Designer', 'Estimado', 'Real']],
@@ -344,7 +344,7 @@ export default function generateReport(data) {
       return row;
     });
 
-    doc.autoTable({
+    autoTable(doc, {
       startY: y,
       margin: { left: MARGIN, right: MARGIN },
       head: [headRow],
