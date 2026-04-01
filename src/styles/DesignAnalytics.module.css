@@ -15,6 +15,8 @@
 .logo { font-size: 1.1rem; font-weight: 800; letter-spacing: 0.12em; color: #C9971A; }
 .subtitle { font-size: 0.72rem; color: #555; text-transform: uppercase; letter-spacing: 0.06em; }
 .headerRight { display: flex; align-items: center; gap: 0.6rem; }
+.btnGold { padding: 0.4rem 1rem; background: #C9971A; color: #080808; font-weight: 700; font-size: 0.82rem; border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; }
+.btnGold:hover { background: #d4a82b; transform: translateY(-1px); box-shadow: 0 3px 10px rgba(201,151,26,0.3); }
 .btnGhost { padding: 0.4rem 0.8rem; background: transparent; border: 1px solid #333; border-radius: 6px; color: #999; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
 .btnGhost:hover { border-color: #C9971A; color: #C9971A; }
 .userInfo { display: flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; color: #888; }

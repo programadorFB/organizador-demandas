@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { design as designApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
+import generateReport from '../services/generateReport';
 import styles from '../styles/DesignAnalytics.module.css';
 
 const STATUS_LABELS = {
@@ -132,6 +133,7 @@ export default function DesignAnalyticsPage() {
           <span className={styles.subtitle}>Analytics</span>
         </div>
         <div className={styles.headerRight}>
+          <button className={styles.btnGold} onClick={() => generateReport(data)}>Baixar PDF</button>
           <button className={styles.btnGhost} onClick={() => navigate('/design/board')}>Voltar ao Board</button>
           <div className={styles.userInfo}>
             <span>{user?.name}</span>
