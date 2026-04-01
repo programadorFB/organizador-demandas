@@ -133,6 +133,16 @@ export const design = {
   stats: () => request('/design/stats'),
   analytics: () => request('/design/analytics'),
   designers: () => request('/design/designers'),
+  uploadAvatar: async (file) => {
+    const form = new FormData();
+    form.append('avatar', file);
+    const token = localStorage.getItem('token');
+    const res = await fetch(`${API}/design/avatar`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro');
+    return data;
+  },
+  removeAvatar: () => request('/design/avatar', { method: 'DELETE' }),
   createDesigner: (body) => request('/design/designers', { method: 'POST', body: JSON.stringify(body) }),
   toggleDesigner: (id) => request(`/design/designers/${id}/toggle-active`, { method: 'PATCH' }),
   notifications: () => request('/design/notifications'),

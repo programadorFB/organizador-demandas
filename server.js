@@ -769,10 +769,31 @@ async function notifyDesignAdmins(excludeUserId, cardId, message, type) {
   }
 }
 
+// Avatar
+app.post('/api/design/avatar', authMiddleware, roleMiddleware(...designAccess), upload.single('avatar'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'Nenhuma imagem enviada' });
+    // Remover avatar antigo
+    const old = (await pool.query('SELECT avatar FROM users WHERE id=$1', [req.user.id])).rows[0];
+    if (old?.avatar) { try { unlinkSync(`uploads/${old.avatar}`); } catch {} }
+    await pool.query('UPDATE users SET avatar = $1 WHERE id = $2', [req.file.filename, req.user.id]);
+    res.json({ avatar: req.file.filename });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Erro ao salvar avatar' }); }
+});
+
+app.delete('/api/design/avatar', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const old = (await pool.query('SELECT avatar FROM users WHERE id=$1', [req.user.id])).rows[0];
+    if (old?.avatar) { try { unlinkSync(`uploads/${old.avatar}`); } catch {} }
+    await pool.query('UPDATE users SET avatar = NULL WHERE id = $1', [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
 // Designers list
 app.get('/api/design/designers', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
   try {
-    const result = await pool.query("SELECT id, name, email, role FROM users WHERE role IN ('designer','design_admin') AND active = true ORDER BY name");
+    const result = await pool.query("SELECT id, name, email, role, active, avatar FROM users WHERE role IN ('designer','design_admin') AND active = true ORDER BY name");
     res.json(result.rows);
   } catch (err) { res.status(500).json({ error: 'Erro ao listar designers' }); }
 });
@@ -782,7 +803,7 @@ app.get('/api/design/cards', authMiddleware, roleMiddleware(...designAccess), as
   try {
     const { status, designer_id } = req.query;
     let query = `
-      SELECT c.*, d.name as designer_name, cb.name as created_by_name,
+      SELECT c.*, d.name as designer_name, d.avatar as designer_avatar, cb.name as created_by_name,
         (SELECT COUNT(*) FROM design_checklist WHERE card_id = c.id)::int as checklist_total,
         (SELECT COUNT(*) FROM design_checklist WHERE card_id = c.id AND checked = true)::int as checklist_done,
         (SELECT COUNT(*) FROM design_comments WHERE card_id = c.id)::int as comments_count

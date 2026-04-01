@@ -40,6 +40,16 @@
 .logoutBtn { background: transparent; color: #666; font-size: 0.78rem; padding: 0.3rem 0.5rem; border-radius: 4px; }
 .logoutBtn:hover { color: #ff4757; background: rgba(255,71,87,0.08); }
 
+/* Avatar button */
+.avatarBtn {
+  width: 34px; height: 34px; border-radius: 50%; overflow: hidden; border: 2px solid #333;
+  background: linear-gradient(135deg, #C9971A, #a07a10); cursor: pointer; transition: all 0.2s;
+  display: flex; align-items: center; justify-content: center; padding: 0; flex-shrink: 0;
+}
+.avatarBtn:hover { border-color: #C9971A; transform: scale(1.05); }
+.avatarImg { width: 100%; height: 100%; object-fit: cover; }
+.avatarInitials { font-size: 0.65rem; font-weight: 800; color: #080808; }
+
 /* New Card Modal */
 .modalOverlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.75); backdrop-filter: blur(4px);
@@ -163,7 +173,8 @@
 .cardExpert { font-size: 0.75rem; color: #888; margin-bottom: 0.35rem; }
 
 .cardMeta { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 0.3rem; }
-.designerBadge { font-size: 0.65rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 8px; background: rgba(201,151,26,0.1); color: #C9971A; }
+.designerBadge { font-size: 0.65rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 8px; background: rgba(201,151,26,0.1); color: #C9971A; display: inline-flex; align-items: center; gap: 0.25rem; }
+.designerMiniAvatar { width: 14px; height: 14px; border-radius: 50%; object-fit: cover; }
 .cardDate { font-size: 0.68rem; color: #666; }
 .cardHours { font-size: 0.68rem; color: #666; }
 
@@ -243,6 +254,38 @@
 .notif_movido { border-left: 3px solid #0984e3; }
 .notifUnread { background: rgba(201,151,26,0.05); }
 .notifUnread p { color: #e8e8f0; font-weight: 500; }
+
+/* Profile Panel */
+.profilePanel {
+  padding: 1rem 1.2rem; background: #0d0d0d; border-bottom: 1px solid #1a1a1a;
+  animation: fadeIn 0.2s ease; position: relative; z-index: 1;
+}
+.profileBody { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding: 0.8rem 0; }
+.profileAvatarLarge {
+  width: 80px; height: 80px; border-radius: 50%; overflow: hidden;
+  background: linear-gradient(135deg, #C9971A, #a07a10); border: 3px solid #C9971A;
+  display: flex; align-items: center; justify-content: center;
+}
+.profileAvatarLarge img { width: 100%; height: 100%; object-fit: cover; }
+.profileAvatarLarge span { font-size: 1.6rem; font-weight: 800; color: #080808; }
+.profileName { font-size: 1rem; font-weight: 700; color: #e8e8f0; }
+.profileEmail { font-size: 0.78rem; color: #666; }
+.profileActions { display: flex; gap: 0.5rem; margin-top: 0.3rem; }
+
+/* Team photos */
+.teamPhotos { margin-top: 0.8rem; border-top: 1px solid #1a1a1a; padding-top: 0.8rem; }
+.teamTitle { font-size: 0.75rem; font-weight: 700; color: #C9971A; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.6rem; }
+.teamGrid { display: flex; gap: 1.2rem; flex-wrap: wrap; }
+.teamMember { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+.teamAvatar {
+  width: 50px; height: 50px; border-radius: 50%; overflow: hidden;
+  background: linear-gradient(135deg, #C9971A, #a07a10); border: 2px solid #333;
+  display: flex; align-items: center; justify-content: center;
+}
+.teamAvatar img { width: 100%; height: 100%; object-fit: cover; }
+.teamAvatar span { font-size: 0.85rem; font-weight: 800; color: #080808; }
+.teamMemberName { font-size: 0.78rem; font-weight: 600; color: #e8e8f0; }
+.teamMemberRole { font-size: 0.62rem; color: #666; text-transform: uppercase; letter-spacing: 0.03em; }
 
 /* Manage Designers Panel */
 .managePanel {

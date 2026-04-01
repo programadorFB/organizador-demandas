@@ -42,6 +42,8 @@ export default function DesignBoardPage() {
   const [showBgInput, setShowBgInput] = useState(false);
   const [dragCardStatus, setDragCardStatus] = useState(null);
   const [showManageDesigners, setShowManageDesigners] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [myAvatar, setMyAvatar] = useState(null);
   const [newDesigner, setNewDesigner] = useState({ name: '', email: '', password: '' });
   const [newCard, setNewCard] = useState({ title: '', expert_name: '', delivery_type: '', priority: 'normal', designer_id: '', start_date: '', deadline: '', estimated_hours: '', description: '', status: 'demanda' });
   const [ncChecklist, setNcChecklist] = useState([]);
@@ -72,12 +74,14 @@ export default function DesignBoardPage() {
     try {
       const d = await designApi.designers();
       setDesigners(d);
+      const me = d.find(x => x.id === user?.id);
+      if (me) setMyAvatar(me.avatar);
       if (isDesignAdmin) {
         const s = await designApi.stats();
         setStats(s);
       }
     } catch { /* ignore */ }
-  }, [isDesignAdmin]);
+  }, [isDesignAdmin, user?.id]);
 
   useEffect(() => { loadCards(); }, [loadCards]);
   useEffect(() => { loadMeta(); }, [loadMeta]);
@@ -205,6 +209,23 @@ export default function DesignBoardPage() {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
+  const handleUploadAvatar = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const res = await designApi.uploadAvatar(file);
+      setMyAvatar(res.avatar);
+      loadMeta();
+    } catch (err) { alert(err.message); }
+    e.target.value = '';
+  };
+
+  const handleRemoveAvatar = async () => {
+    await designApi.removeAvatar();
+    setMyAvatar(null);
+    loadMeta();
+  };
+
   const handleLogout = () => { logout(); navigate('/design'); };
 
   const isOverdue = (card) => card.deadline && new Date(card.deadline) < new Date() && card.status !== 'concluidas';
@@ -249,6 +270,9 @@ export default function DesignBoardPage() {
             </>
           )}
           <button className={styles.bgBtn} onClick={() => setShowBgInput(!showBgInput)} title="Plano de fundo">🖼</button>
+          <button className={styles.avatarBtn} onClick={() => setShowProfile(!showProfile)}>
+            {myAvatar ? <img src={`/uploads/${myAvatar}`} alt="" className={styles.avatarImg} /> : <span className={styles.avatarInitials}>{user?.name?.slice(0, 2).toUpperCase()}</span>}
+          </button>
           <div className={styles.userInfo}>
             <span>{user?.name}</span>
             <button className={styles.logoutBtn} onClick={handleLogout}>Sair</button>
@@ -409,6 +433,45 @@ export default function DesignBoardPage() {
         </div>
       )}
 
+      {/* Profile */}
+      {showProfile && (
+        <div className={styles.profilePanel}>
+          <div className={styles.managePanelHeader}>
+            <h3>Meu Perfil</h3>
+            <button className={styles.logoutBtn} onClick={() => setShowProfile(false)}>✕</button>
+          </div>
+          <div className={styles.profileBody}>
+            <div className={styles.profileAvatarLarge}>
+              {myAvatar ? <img src={`/uploads/${myAvatar}`} alt="" /> : <span>{user?.name?.slice(0, 2).toUpperCase()}</span>}
+            </div>
+            <p className={styles.profileName}>{user?.name}</p>
+            <p className={styles.profileEmail}>{user?.email}</p>
+            <div className={styles.profileActions}>
+              <label className={styles.btnGold} style={{ cursor: 'pointer' }}>
+                <input type="file" accept="image/*" onChange={handleUploadAvatar} style={{ display: 'none' }} />
+                {myAvatar ? 'Trocar Foto' : 'Enviar Foto'}
+              </label>
+              {myAvatar && <button className={styles.btnGhost} onClick={handleRemoveAvatar}>Remover</button>}
+            </div>
+          </div>
+          {/* Fotos do time */}
+          <div className={styles.teamPhotos}>
+            <h4 className={styles.teamTitle}>Time</h4>
+            <div className={styles.teamGrid}>
+              {designers.map(d => (
+                <div key={d.id} className={styles.teamMember}>
+                  <div className={styles.teamAvatar}>
+                    {d.avatar ? <img src={`/uploads/${d.avatar}`} alt="" /> : <span>{d.name.slice(0, 2).toUpperCase()}</span>}
+                  </div>
+                  <span className={styles.teamMemberName}>{d.name}</span>
+                  <span className={styles.teamMemberRole}>{d.role === 'design_admin' ? 'Admin' : 'Designer'}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Manage Designers */}
       {showManageDesigners && (
         <div className={styles.managePanel}>
@@ -473,7 +536,12 @@ export default function DesignBoardPage() {
                   <h4 className={styles.cardTitle}>{card.title}</h4>
                   <p className={styles.cardExpert}>{card.expert_name}</p>
                   <div className={styles.cardMeta}>
-                    {card.designer_name && <span className={styles.designerBadge}>{card.designer_name}</span>}
+                    {card.designer_name && (
+                      <span className={styles.designerBadge}>
+                        {card.designer_avatar && <img src={`/uploads/${card.designer_avatar}`} alt="" className={styles.designerMiniAvatar} />}
+                        {card.designer_name}
+                      </span>
+                    )}
                     {card.deadline && <span className={styles.cardDate}>{formatDt(card.deadline)}</span>}
                     {card.estimated_hours && <span className={styles.cardHours}>{card.estimated_hours}h</span>}
                   </div>
