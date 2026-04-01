@@ -81,6 +81,7 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
   const handleToggleVisible = async () => {
     await designApi.toggleVisible(card.id);
     onUpdate();
+    onClose();
   };
 
   const isImage = (mime) => mime?.startsWith('image/');
