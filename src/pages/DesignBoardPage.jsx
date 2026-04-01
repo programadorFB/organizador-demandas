@@ -466,6 +466,7 @@ export default function DesignBoardPage() {
                   <div className={styles.cardTop}>
                     <span className={`${styles.priBadge} ${styles[`pri_${card.priority}`]}`}>{card.priority}</span>
                     {isOverdue(card) && <span className={styles.overdueBadge}>ATRASADO</span>}
+                    {card.visible_to_all && <span className={styles.visibleTag}>TODOS</span>}
                     {card.delivery_type && <span className={styles.deliveryTag}>{card.delivery_type}</span>}
                   </div>
                   <h4 className={styles.cardTitle}>{card.title}</h4>

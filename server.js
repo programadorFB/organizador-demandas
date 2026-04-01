@@ -761,6 +761,14 @@ app.delete('/api/scrum/notes/:id', authMiddleware, roleMiddleware('admin'), asyn
 const designAccess = ['admin', 'design_admin', 'designer'];
 const designAdmin = ['admin', 'design_admin'];
 
+// Helper: notificar admins do design
+async function notifyDesignAdmins(excludeUserId, cardId, message, type) {
+  const admins = await pool.query("SELECT id FROM users WHERE role IN ('admin','design_admin') AND id != $1 AND active = true", [excludeUserId]);
+  for (const adm of admins.rows) {
+    await pool.query('INSERT INTO design_notifications (user_id, card_id, message, type) VALUES ($1,$2,$3,$4)', [adm.id, cardId, message, type]);
+  }
+}
+
 // Designers list
 app.get('/api/design/designers', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
   try {
@@ -785,9 +793,9 @@ app.get('/api/design/cards', authMiddleware, roleMiddleware(...designAccess), as
     `;
     const params = [];
     let idx = 1;
-    // Designers only see their own cards in their visible columns
+    // Designers see their own cards + cards visible to all, in their columns
     if (req.user.role === 'designer') {
-      query += ` AND c.designer_id = $${idx++}`; params.push(req.user.id);
+      query += ` AND (c.designer_id = $${idx++} OR c.visible_to_all = true)`; params.push(req.user.id);
       query += ` AND c.status IN ('links', 'demanda', 'em_andamento', 'alteracoes')`;
     }
     if (status) { query += ` AND c.status = $${idx++}`; params.push(status); }
@@ -908,7 +916,14 @@ app.post('/api/design/cards/:id/checklist', authMiddleware, roleMiddleware(...de
 app.patch('/api/design/checklist/:id/toggle', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
   try {
     const result = await pool.query('UPDATE design_checklist SET checked = NOT checked WHERE id = $1 RETURNING *', [req.params.id]);
-    res.json(result.rows[0]);
+    const item = result.rows[0];
+    if (item.checked) {
+      const card = (await pool.query('SELECT title FROM design_cards WHERE id=$1', [item.card_id])).rows[0];
+      const userName = (await pool.query('SELECT name FROM users WHERE id=$1', [req.user.id])).rows[0]?.name;
+      const sectionLabel = item.section ? ` [${item.section}]` : '';
+      await notifyDesignAdmins(req.user.id, item.card_id, `${userName} concluiu "${item.text}"${sectionLabel} em "${card?.title}"`, 'checklist');
+    }
+    res.json(item);
   } catch (err) { res.status(500).json({ error: 'Erro' }); }
 });
 
@@ -934,6 +949,11 @@ app.post('/api/design/cards/:id/comments', authMiddleware, roleMiddleware(...des
   try {
     const { content } = req.body;
     const result = await pool.query('INSERT INTO design_comments (card_id, user_id, content) VALUES ($1,$2,$3) RETURNING *', [req.params.id, req.user.id, content]);
+    // Notificar admins
+    const card = (await pool.query('SELECT title FROM design_cards WHERE id=$1', [req.params.id])).rows[0];
+    const userName = (await pool.query('SELECT name FROM users WHERE id=$1', [req.user.id])).rows[0]?.name;
+    const preview = content.length > 60 ? content.slice(0, 60) + '...' : content;
+    await notifyDesignAdmins(req.user.id, parseInt(req.params.id), `${userName} comentou em "${card?.title}": ${preview}`, 'comentario');
     res.status(201).json(result.rows[0]);
   } catch (err) { res.status(500).json({ error: 'Erro' }); }
 });
@@ -1002,6 +1022,50 @@ app.patch('/api/design/designers/:id/toggle-active', authMiddleware, roleMiddlew
   } catch (err) { res.status(500).json({ error: 'Erro' }); }
 });
 
+// Toggle visible to all
+app.patch('/api/design/cards/:id/visible', authMiddleware, roleMiddleware(...designAdmin), async (req, res) => {
+  try {
+    const result = await pool.query('UPDATE design_cards SET visible_to_all = NOT visible_to_all, updated_at = NOW() WHERE id = $1 RETURNING *', [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Card não encontrado' });
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+// Links de referência
+app.get('/api/design/cards/:id/links', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT l.*, u.name as user_name FROM design_links l JOIN users u ON l.user_id = u.id WHERE l.card_id = $1 ORDER BY l.created_at DESC',
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+app.post('/api/design/cards/:id/links', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const { url, label } = req.body;
+    if (!url) return res.status(400).json({ error: 'URL obrigatória' });
+    const result = await pool.query('INSERT INTO design_links (card_id, user_id, url, label) VALUES ($1,$2,$3,$4) RETURNING *',
+      [req.params.id, req.user.id, url, label || null]);
+    // Notificar admins
+    const card = (await pool.query('SELECT title FROM design_cards WHERE id=$1', [req.params.id])).rows[0];
+    const userName = (await pool.query('SELECT name FROM users WHERE id=$1', [req.user.id])).rows[0]?.name;
+    await notifyDesignAdmins(req.user.id, parseInt(req.params.id), `${userName} adicionou link em "${card?.title}": ${label || url}`, 'link');
+    res.status(201).json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+app.delete('/api/design/links/:id', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const link = (await pool.query('SELECT * FROM design_links WHERE id=$1', [req.params.id])).rows[0];
+    if (!link) return res.status(404).json({ error: 'Link não encontrado' });
+    if (link.user_id !== req.user.id && !designAdmin.includes(req.user.role)) return res.status(403).json({ error: 'Sem permissão' });
+    await pool.query('DELETE FROM design_links WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
 // Design Attachments
 app.get('/api/design/cards/:id/attachments', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
   try {
@@ -1026,6 +1090,11 @@ app.post('/api/design/cards/:id/attachments', authMiddleware, roleMiddleware(...
       );
       results.push(r.rows[0]);
     }
+    // Notificar admins
+    const card = (await pool.query('SELECT title FROM design_cards WHERE id=$1', [req.params.id])).rows[0];
+    const userName = (await pool.query('SELECT name FROM users WHERE id=$1', [req.user.id])).rows[0]?.name;
+    const fileNames = req.files.map(f => f.originalname).join(', ');
+    await notifyDesignAdmins(req.user.id, parseInt(req.params.id), `${userName} anexou ${req.files.length} arquivo(s) em "${card?.title}": ${fileNames}`, 'anexo');
     res.status(201).json(results);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erro ao fazer upload' }); }
 });

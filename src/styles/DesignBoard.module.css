@@ -156,6 +156,7 @@
 .pri_alta { background: rgba(255,107,53,0.12); color: #ff6b35; }
 .pri_urgente { background: rgba(255,71,87,0.15); color: #ff4757; }
 .overdueBadge { font-size: 0.58rem; font-weight: 800; padding: 0.1rem 0.4rem; border-radius: 10px; background: rgba(255,71,87,0.15); color: #ff4757; text-transform: uppercase; letter-spacing: 0.04em; animation: pulse 2s infinite; }
+.visibleTag { font-size: 0.58rem; font-weight: 800; padding: 0.1rem 0.35rem; border-radius: 8px; background: rgba(0,184,148,0.15); color: #00b894; text-transform: uppercase; letter-spacing: 0.03em; }
 .deliveryTag { font-size: 0.6rem; font-weight: 500; color: #777; background: #181818; padding: 0.1rem 0.35rem; border-radius: 4px; }
 
 .cardTitle { font-size: 0.82rem; font-weight: 600; color: #e0e0e0; margin-bottom: 0.2rem; line-height: 1.3; }

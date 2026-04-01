@@ -26,14 +26,19 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
   const [editForm, setEditForm] = useState({});
   const [attachList, setAttachList] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [linksList, setLinksList] = useState([]);
+  const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [newLinkLabel, setNewLinkLabel] = useState('');
 
   const loadAttachments = () => designApi.attachments(card.id).then(setAttachList).catch(() => {});
+  const loadLinks = () => designApi.links(card.id).then(setLinksList).catch(() => {});
 
   useEffect(() => {
     designApi.checklist(card.id).then(setChecklist).catch(() => {});
     designApi.comments(card.id).then(setComments).catch(() => {});
     designApi.history(card.id).then(setHistory).catch(() => {});
     loadAttachments();
+    loadLinks();
   }, [card.id]);
 
   const reload = () => {
@@ -41,6 +46,7 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
     designApi.comments(card.id).then(setComments).catch(() => {});
     designApi.history(card.id).then(setHistory).catch(() => {});
     loadAttachments();
+    loadLinks();
   };
 
   const handleUploadFiles = async (e) => {
@@ -57,6 +63,24 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
   const handleDeleteAttach = async (id) => {
     await designApi.deleteAttachment(id);
     await loadAttachments();
+  };
+
+  const handleAddLink = async () => {
+    if (!newLinkUrl.trim()) return;
+    await designApi.addLink(card.id, newLinkUrl, newLinkLabel || null);
+    setNewLinkUrl('');
+    setNewLinkLabel('');
+    await loadLinks();
+  };
+
+  const handleDeleteLink = async (id) => {
+    await designApi.deleteLink(id);
+    await loadLinks();
+  };
+
+  const handleToggleVisible = async () => {
+    await designApi.toggleVisible(card.id);
+    onUpdate();
   };
 
   const isImage = (mime) => mime?.startsWith('image/');
@@ -167,6 +191,7 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
             <span className={`${styles.priBadge} ${styles[`pri_${card.priority}`]}`}>{card.priority}</span>
             <span className={styles.statusBadge}>{STATUS_LABELS[card.status]}</span>
             {isOverdue && <span className={styles.overdueBadge}>ATRASADO</span>}
+            {card.visible_to_all && <span className={styles.visibleBadge}>TODOS</span>}
             <span className={styles.cardId}>#{card.id}</span>
           </div>
           <button className={styles.closeBtn} onClick={onClose}>✕</button>
@@ -338,6 +363,34 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
                   <span className={styles.btnGhost}>{uploading ? 'Enviando...' : '+ Adicionar Anexos'}</span>
                 </label>
               </div>
+
+              {/* Links */}
+              <div className={styles.linksSection}>
+                <h4 className={styles.linksTitle}>Links</h4>
+                {linksList.length > 0 && (
+                  <div className={styles.linksList}>
+                    {linksList.map(l => (
+                      <div key={l.id} className={styles.linkItem}>
+                        <span className={styles.linkIcon}>🔗</span>
+                        <div className={styles.linkInfo}>
+                          <a href={l.url} target="_blank" rel="noreferrer" className={styles.linkUrl}>{l.label || l.url}</a>
+                          {l.label && <span className={styles.linkMeta}>{l.url}</span>}
+                          <span className={styles.linkMeta}>{l.user_name}</span>
+                        </div>
+                        {(l.user_id === user?.id || isAdmin) && (
+                          <button className={styles.attachDel} onClick={() => handleDeleteLink(l.id)}>✕</button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {linksList.length === 0 && <p className={styles.empty}>Nenhum link.</p>}
+                <div className={styles.addLinkRow}>
+                  <input placeholder="https://..." value={newLinkUrl} onChange={e => setNewLinkUrl(e.target.value)} className={styles.linkInput} />
+                  <input placeholder="Nome (opcional)" value={newLinkLabel} onChange={e => setNewLinkLabel(e.target.value)} className={styles.linkLabelInput} />
+                  <button className={styles.btnGold} onClick={handleAddLink}>+</button>
+                </div>
+              </div>
             </div>
           )}
 
@@ -401,6 +454,12 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
                   <button className={styles.btnAlter} onClick={handleRequestChanges}>Pedir Alteracao</button>
                 </div>
               </>
+            )}
+            {/* Admin: toggle visible to all */}
+            {isAdmin && (
+              <button className={card.visible_to_all ? styles.btnGold : styles.btnGhost} onClick={handleToggleVisible}>
+                {card.visible_to_all ? '👁 Visível para todos' : '👁 Exibir para todo o time'}
+              </button>
             )}
             {/* Admin: move to any column */}
             {isAdmin && card.status !== 'analise' && (

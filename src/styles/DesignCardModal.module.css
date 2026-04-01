@@ -20,6 +20,7 @@
 .pri_urgente { background: rgba(255,71,87,0.15); color: #ff4757; }
 .statusBadge { font-size: 0.65rem; font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 10px; background: #181818; color: #999; }
 .overdueBadge { font-size: 0.62rem; font-weight: 800; padding: 0.1rem 0.4rem; border-radius: 10px; background: rgba(255,71,87,0.15); color: #ff4757; text-transform: uppercase; }
+.visibleBadge { font-size: 0.62rem; font-weight: 800; padding: 0.1rem 0.4rem; border-radius: 10px; background: rgba(0,184,148,0.15); color: #00b894; text-transform: uppercase; }
 .cardId { font-size: 0.75rem; color: #444; }
 .closeBtn { background: transparent; color: #666; font-size: 1.1rem; padding: 0.3rem 0.5rem; border-radius: 6px; }
 .closeBtn:hover { background: #181818; color: #ccc; }
@@ -129,6 +130,23 @@
 .attachDel:hover { color: #ff4757; background: rgba(255,71,87,0.08); }
 .attachUpload { margin-top: 0.4rem; }
 .uploadLabel { cursor: pointer; display: inline-block; }
+
+/* Links */
+.linksSection { margin-top: 1rem; border-top: 1px solid #1a1a1a; padding-top: 0.8rem; }
+.linksTitle { font-size: 0.75rem; font-weight: 700; color: #C9971A; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.5rem; }
+.linksList { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.5rem; }
+.linkItem { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem; background: #111; border: 1px solid #1e1e1e; border-radius: 6px; }
+.linkItem:hover { border-color: #333; }
+.linkIcon { font-size: 1rem; flex-shrink: 0; }
+.linkInfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }
+.linkUrl { font-size: 0.82rem; font-weight: 500; color: #C9971A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-decoration: none; }
+.linkUrl:hover { color: #d4a82b; text-decoration: underline; }
+.linkMeta { font-size: 0.65rem; color: #555; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.addLinkRow { display: flex; gap: 0.4rem; }
+.linkInput { flex: 2; padding: 0.4rem 0.6rem; background: #111; border: 1px solid #222; border-radius: 6px; color: #e8e8f0; font-size: 0.82rem; }
+.linkInput:focus { border-color: #C9971A; outline: none; }
+.linkLabelInput { flex: 1; padding: 0.4rem 0.6rem; background: #111; border: 1px solid #222; border-radius: 6px; color: #e8e8f0; font-size: 0.82rem; }
+.linkLabelInput:focus { border-color: #C9971A; outline: none; }
 
 /* Actions */
 .actions { border-top: 1px solid #1a1a1a; padding-top: 0.8rem; display: flex; flex-direction: column; gap: 0.6rem; }

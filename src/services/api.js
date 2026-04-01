@@ -153,4 +153,8 @@ export const design = {
     return data;
   },
   deleteAttachment: (id) => request(`/design/attachments/${id}`, { method: 'DELETE' }),
+  toggleVisible: (id) => request(`/design/cards/${id}/visible`, { method: 'PATCH' }),
+  links: (cardId) => request(`/design/cards/${cardId}/links`),
+  addLink: (cardId, url, label) => request(`/design/cards/${cardId}/links`, { method: 'POST', body: JSON.stringify({ url, label }) }),
+  deleteLink: (id) => request(`/design/links/${id}`, { method: 'DELETE' }),
 };
