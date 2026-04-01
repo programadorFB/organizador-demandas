@@ -201,7 +201,7 @@
 .btnGhost:hover { border-color: #555; color: #ccc; }
 
 /* Notifications */
-.notifWrap { position: relative; }
+.notifWrap { position: relative; z-index: 9999; }
 .notifBtn {
   background: transparent; border: 1px solid #333; border-radius: 6px; padding: 0.3rem 0.5rem;
   font-size: 1rem; cursor: pointer; position: relative; transition: all 0.2s;
@@ -213,10 +213,13 @@
   border-radius: 50%; display: flex; align-items: center; justify-content: center;
   line-height: 1; padding: 0 3px;
 }
+.notifOverlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9998;
+}
 .notifDropdown {
-  position: absolute; top: 100%; right: 0; margin-top: 0.4rem; width: 320px;
-  background: #111; border: 1px solid #222; border-radius: 10px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.5); z-index: 999; animation: fadeIn 0.15s ease;
+  position: absolute; top: 100%; right: 0; margin-top: 0.4rem; width: 360px;
+  background: #111; border: 1px solid #C9971A; border-radius: 10px;
+  box-shadow: 0 8px 40px rgba(201,151,26,0.15), 0 0 0 1px rgba(201,151,26,0.2); z-index: 9999; animation: fadeIn 0.15s ease;
   overflow: hidden;
 }
 .notifHeader {

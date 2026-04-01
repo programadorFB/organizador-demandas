@@ -237,21 +237,24 @@ export default function DesignBoardPage() {
               {unreadCount > 0 && <span className={styles.notifBadge}>{unreadCount}</span>}
             </button>
             {showNotifs && (
-              <div className={styles.notifDropdown}>
-                <div className={styles.notifHeader}>
-                  <span>Notificacoes</span>
-                  {unreadCount > 0 && <button className={styles.notifClear} onClick={handleMarkAllRead}>Marcar lidas</button>}
+              <>
+                <div className={styles.notifOverlay} onClick={() => setShowNotifs(false)} />
+                <div className={styles.notifDropdown}>
+                  <div className={styles.notifHeader}>
+                    <span>Notificações</span>
+                    {unreadCount > 0 && <button className={styles.notifClear} onClick={handleMarkAllRead}>Marcar lidas</button>}
+                  </div>
+                  <div className={styles.notifList}>
+                    {notifications.length === 0 && <p className={styles.notifEmpty}>Nenhuma notificação.</p>}
+                    {notifications.map(n => (
+                      <div key={n.id} className={`${styles.notifItem} ${styles[`notif_${n.type}`]} ${!n.read ? styles.notifUnread : ''}`}>
+                        <p>{n.message}</p>
+                        <span>{new Date(n.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className={styles.notifList}>
-                  {notifications.length === 0 && <p className={styles.notifEmpty}>Nenhuma notificacao.</p>}
-                  {notifications.map(n => (
-                    <div key={n.id} className={`${styles.notifItem} ${styles[`notif_${n.type}`]} ${!n.read ? styles.notifUnread : ''}`}>
-                      <p>{n.message}</p>
-                      <span>{new Date(n.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              </>
             )}
           </div>
           {isDesignAdmin && (
