@@ -790,6 +790,29 @@ app.delete('/api/design/avatar', authMiddleware, roleMiddleware(...designAccess)
   } catch (err) { res.status(500).json({ error: 'Erro' }); }
 });
 
+// User visual preferences (bg_image, bg_effect)
+app.get('/api/design/preferences', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const result = await pool.query('SELECT bg_image, bg_effect FROM users WHERE id = $1', [req.user.id]);
+    res.json(result.rows[0] || { bg_image: null, bg_effect: 'none' });
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+app.patch('/api/design/preferences', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const { bg_image, bg_effect } = req.body;
+    const fields = [];
+    const values = [];
+    let idx = 1;
+    if (bg_image !== undefined) { fields.push(`bg_image = $${idx++}`); values.push(bg_image || null); }
+    if (bg_effect !== undefined) { fields.push(`bg_effect = $${idx++}`); values.push(bg_effect || 'none'); }
+    if (!fields.length) return res.status(400).json({ error: 'Nada para atualizar' });
+    values.push(req.user.id);
+    await pool.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${idx}`, values);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
 // Designers list
 app.get('/api/design/designers', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
   try {

@@ -34,7 +34,8 @@
       "Bash(npx vite:*)",
       "Bash(grep:*)",
       "Bash(docker exec demandas_app:*)",
-      "Bash(docker cp:*)"
+      "Bash(docker cp:*)",
+      "Bash(docker exec demandas_db:*)"
     ]
   }
 }

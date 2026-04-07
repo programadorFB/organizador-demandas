@@ -30,9 +30,12 @@ services:
       DATABASE_URL: postgresql://postgres:1234@db:5432/organizador_demandas
       JWT_SECRET: org_demandas_secret_key_2024
       PORT: "3010"
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   pg_data:
+  uploads_data:

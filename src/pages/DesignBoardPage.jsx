@@ -38,11 +38,9 @@ export default function DesignBoardPage() {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotifs, setShowNotifs] = useState(false);
-  const bgKey = `design_bg_${user?.id || 'default'}`;
-  const [bgImage, setBgImage] = useState(() => localStorage.getItem(bgKey) || '');
+  const [bgImage, setBgImage] = useState('');
   const [showBgInput, setShowBgInput] = useState(false);
-  const effectKey = `design_effect_${user?.id || 'default'}`;
-  const [bgEffect, setBgEffect] = useState(() => localStorage.getItem(effectKey) || 'none');
+  const [bgEffect, setBgEffect] = useState('none');
   const [showStylePanel, setShowStylePanel] = useState(false);
   const [dragCardStatus, setDragCardStatus] = useState(null);
   const [showManageDesigners, setShowManageDesigners] = useState(false);
@@ -91,6 +89,9 @@ export default function DesignBoardPage() {
       }
       const vs = await designApi.videoStats();
       setVideoStats(vs);
+      const prefs = await designApi.getPreferences();
+      if (prefs.bg_image) setBgImage(prefs.bg_image);
+      if (prefs.bg_effect) setBgEffect(prefs.bg_effect);
     } catch { /* ignore */ }
   }, [isDesignAdmin, user?.id]);
 
@@ -111,13 +112,13 @@ export default function DesignBoardPage() {
 
   const handleBgSave = (url) => {
     setBgImage(url);
-    localStorage.setItem(bgKey, url);
     setShowBgInput(false);
+    designApi.savePreferences({ bg_image: url || '' }).catch(() => {});
   };
 
   const handleEffectChange = (effect) => {
     setBgEffect(effect);
-    localStorage.setItem(effectKey, effect);
+    designApi.savePreferences({ bg_effect: effect }).catch(() => {});
   };
 
   const handleCreateDesigner = async (e) => {
