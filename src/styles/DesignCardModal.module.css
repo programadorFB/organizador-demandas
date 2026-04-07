@@ -69,8 +69,19 @@
 .checkProgressBar span { font-size: 0.75rem; color: #888; font-weight: 600; }
 
 .checkList { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.5rem; }
-.checkItem { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem; border-radius: 6px; }
+.checkItem { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem; border-radius: 6px; transition: background 0.15s, border-color 0.15s, opacity 0.15s; border: 1px solid transparent; }
 .checkItem:hover { background: #151515; }
+[draggable="true"].checkItem,
+[draggable="true"].attachItem,
+[draggable="true"].linkItem { cursor: grab; user-select: none; -webkit-user-select: none; }
+[draggable="true"].checkItem:active,
+[draggable="true"].attachItem:active,
+[draggable="true"].linkItem:active { cursor: grabbing; }
+.dragItemActive { opacity: 0.3; border-color: #333 !important; }
+.dragItemOver { border-color: #C9971A !important; background: rgba(201,151,26,0.1) !important; box-shadow: 0 0 0 1px rgba(201,151,26,0.3); }
+.dragHandle { color: #333; font-size: 0.9rem; cursor: grab; user-select: none; flex-shrink: 0; line-height: 1; padding: 0.15rem; }
+.dragHandle:hover { color: #C9971A; }
+[draggable="true"]:hover .dragHandle { color: #888; }
 .checkItem input[type="checkbox"] { accent-color: #C9971A; width: 16px; height: 16px; cursor: pointer; }
 .checkItem span { font-size: 0.85rem; color: #ccc; flex: 1; }
 .checkDone { text-decoration: line-through; color: #555 !important; }
@@ -116,7 +127,7 @@
 
 /* Attachments */
 .attachGrid { display: flex; flex-direction: column; gap: 0.4rem; margin-bottom: 0.6rem; }
-.attachItem { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.6rem; background: #111; border: 1px solid #1e1e1e; border-radius: 6px; }
+.attachItem { display: flex; align-items: center; gap: 0.6rem; padding: 0.45rem 0.6rem; background: #111; border: 1px solid #1e1e1e; border-radius: 6px; transition: background 0.15s, border-color 0.15s, opacity 0.15s; }
 .attachItem:hover { border-color: #333; }
 .attachThumb { flex-shrink: 0; width: 48px; height: 48px; border-radius: 4px; overflow: hidden; display: flex; }
 .attachThumb img { width: 100%; height: 100%; object-fit: cover; }
@@ -135,7 +146,7 @@
 .linksSection { margin-top: 1rem; border-top: 1px solid #1a1a1a; padding-top: 0.8rem; }
 .linksTitle { font-size: 0.75rem; font-weight: 700; color: #C9971A; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.5rem; }
 .linksList { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.5rem; }
-.linkItem { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem; background: #111; border: 1px solid #1e1e1e; border-radius: 6px; }
+.linkItem { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem; background: #111; border: 1px solid #1e1e1e; border-radius: 6px; transition: background 0.15s, border-color 0.15s, opacity 0.15s; }
 .linkItem:hover { border-color: #333; }
 .linkIcon { font-size: 1rem; flex-shrink: 0; }
 .linkInfo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.1rem; }

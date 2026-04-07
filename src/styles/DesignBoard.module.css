@@ -319,6 +319,87 @@
 .toggleInactive { border-color: #00b894; color: #00b894; }
 .toggleInactive:hover { border-color: #00b894; }
 
+/* Video Stats Dashboard */
+.videoStatsBtn {
+  display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.8rem;
+  background: linear-gradient(135deg, rgba(201,151,26,0.12), rgba(201,151,26,0.06));
+  border: 1px solid rgba(201,151,26,0.3); border-radius: 8px; cursor: pointer; transition: all 0.2s;
+}
+.videoStatsBtn:hover { border-color: #C9971A; background: rgba(201,151,26,0.15); transform: translateY(-1px); }
+.videoIcon { font-size: 1rem; }
+.videoTotal { font-size: 1.1rem; font-weight: 800; color: #C9971A; }
+.videoLabel { font-size: 0.62rem; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.03em; }
+
+.videoDropdown {
+  position: fixed; top: 55px; right: 24px; width: 340px;
+  background: #111; border: 2px solid #C9971A; border-radius: 12px;
+  box-shadow: 0 16px 60px rgba(0,0,0,0.8), 0 0 30px rgba(201,151,26,0.15);
+  animation: slideDown 0.2s ease; overflow: hidden;
+}
+.videoDropHeader {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.6rem 0.8rem; border-bottom: 1px solid #1e1e1e;
+  font-size: 0.75rem; font-weight: 700; color: #C9971A; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.videoDropTotal {
+  display: flex; flex-direction: column; align-items: center; padding: 0.8rem;
+  background: rgba(201,151,26,0.05); border-bottom: 1px solid #1e1e1e;
+}
+.videoDropTotalVal { font-size: 2rem; font-weight: 800; color: #C9971A; line-height: 1.1; }
+.videoDropTotalLbl { font-size: 0.68rem; color: #777; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.videoEditorList { display: flex; flex-direction: column; }
+.videoEditorRow {
+  display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 0.8rem;
+  border-bottom: 1px solid #1a1a1a; transition: background 0.15s;
+}
+.videoEditorRow:last-child { border-bottom: none; }
+.videoEditorRow:hover { background: rgba(201,151,26,0.04); }
+.videoEditorAvatar {
+  width: 28px; height: 28px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+  background: linear-gradient(135deg, #C9971A, #a07a10); border: 1px solid #333;
+  display: flex; align-items: center; justify-content: center;
+}
+.videoEditorAvatar img { width: 100%; height: 100%; object-fit: cover; }
+.videoEditorAvatar span { font-size: 0.55rem; font-weight: 800; color: #080808; }
+.videoEditorName { flex: 1; font-size: 0.82rem; font-weight: 600; color: #e0e0e0; }
+.videoEditorCount {
+  font-size: 1rem; font-weight: 800; color: #C9971A;
+  background: rgba(201,151,26,0.1); padding: 0.15rem 0.5rem; border-radius: 6px;
+  min-width: 28px; text-align: center;
+}
+.videoEmpty { font-size: 0.78rem; color: #555; text-align: center; padding: 1rem; }
+
+/* Links in create modal */
+.ncLinksWrap { display: flex; flex-direction: column; gap: 0.4rem; }
+.ncLinkList { display: flex; flex-direction: column; gap: 0.25rem; }
+.ncLinkItem {
+  display: flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.5rem;
+  background: #111; border: 1px solid #1e1e1e; border-radius: 6px; font-size: 0.82rem; color: #ccc;
+}
+.ncLinkIcon { font-size: 0.75rem; flex-shrink: 0; }
+.ncLinkText { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ncLinkAdd { display: flex; gap: 0.4rem; align-items: center; }
+.ncLinkAdd input {
+  flex: 1; padding: 0.4rem 0.6rem; background: #111; border: 1px solid #222; border-radius: 6px;
+  color: #e8e8f0; font-size: 0.82rem;
+}
+.ncLinkAdd input:focus { border-color: #C9971A; outline: none; }
+.ncLinkLabelInput { max-width: 140px; }
+
+/* Effect selector */
+.styleLabel { font-size: 0.78rem; font-weight: 600; color: #888; white-space: nowrap; }
+.effectBtn {
+  display: flex; align-items: center; gap: 0.35rem; padding: 0.45rem 0.8rem;
+  background: #111; border: 1px solid #2a2a2a; border-radius: 8px;
+  color: #999; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.effectBtn:hover { border-color: #555; color: #ccc; background: #151515; }
+.effectBtnActive {
+  border-color: #C9971A !important; color: #C9971A !important;
+  background: rgba(201,151,26,0.1) !important; box-shadow: 0 0 12px rgba(201,151,26,0.15);
+}
+
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
 

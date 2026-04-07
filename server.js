@@ -955,6 +955,18 @@ app.delete('/api/design/checklist/:id', authMiddleware, roleMiddleware(...design
   } catch (err) { res.status(500).json({ error: 'Erro' }); }
 });
 
+// Reorder checklist items
+app.patch('/api/design/checklist/reorder', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items)) return res.status(400).json({ error: 'items é obrigatório' });
+    for (const item of items) {
+      await pool.query('UPDATE design_checklist SET sort_order = $1, section = $2 WHERE id = $3', [item.sort_order, item.section ?? null, item.id]);
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Erro ao reordenar' }); }
+});
+
 // Comments
 app.get('/api/design/cards/:id/comments', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
   try {
@@ -1056,7 +1068,7 @@ app.patch('/api/design/cards/:id/visible', authMiddleware, roleMiddleware(...des
 app.get('/api/design/cards/:id/links', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT l.*, u.name as user_name FROM design_links l JOIN users u ON l.user_id = u.id WHERE l.card_id = $1 ORDER BY l.created_at DESC',
+      'SELECT l.*, u.name as user_name FROM design_links l JOIN users u ON l.user_id = u.id WHERE l.card_id = $1 ORDER BY l.sort_order, l.created_at DESC',
       [req.params.id]
     );
     res.json(result.rows);
@@ -1087,12 +1099,24 @@ app.delete('/api/design/links/:id', authMiddleware, roleMiddleware(...designAcce
   } catch (err) { res.status(500).json({ error: 'Erro' }); }
 });
 
+// Reorder links
+app.patch('/api/design/links/reorder', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items)) return res.status(400).json({ error: 'items é obrigatório' });
+    for (const item of items) {
+      await pool.query('UPDATE design_links SET sort_order = $1 WHERE id = $2', [item.sort_order, item.id]);
+    }
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Erro ao reordenar' }); }
+});
+
 // Design Attachments
 app.get('/api/design/cards/:id/attachments', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT a.*, u.name as user_name FROM design_attachments a
-       JOIN users u ON a.user_id = u.id WHERE a.card_id = $1 ORDER BY a.created_at DESC`,
+       JOIN users u ON a.user_id = u.id WHERE a.card_id = $1 ORDER BY a.sort_order, a.created_at DESC`,
       [req.params.id]
     );
     res.json(result.rows);
@@ -1134,6 +1158,18 @@ app.delete('/api/design/attachments/:id', authMiddleware, roleMiddleware(...desi
   } catch (err) { res.status(500).json({ error: 'Erro ao deletar anexo' }); }
 });
 
+// Reorder attachments
+app.patch('/api/design/attachments/reorder', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const { items } = req.body;
+    if (!Array.isArray(items)) return res.status(400).json({ error: 'items é obrigatório' });
+    for (const item of items) {
+      await pool.query('UPDATE design_attachments SET sort_order = $1 WHERE id = $2', [item.sort_order, item.id]);
+    }
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Erro ao reordenar' }); }
+});
+
 // Stats
 app.get('/api/design/stats', authMiddleware, roleMiddleware(...designAdmin), async (req, res) => {
   try {
@@ -1150,6 +1186,39 @@ app.get('/api/design/stats', authMiddleware, roleMiddleware(...designAdmin), asy
       inAnalise: inAnalise.rows[0].c,
     });
   } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+// Video production stats (monthly)
+app.get('/api/design/video-stats', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const total = await pool.query(
+      `SELECT COUNT(*)::int as total FROM design_checklist cl
+       JOIN design_cards c ON cl.card_id = c.id
+       WHERE cl.created_at >= $1`,
+      [monthStart]
+    );
+
+    const perEditor = await pool.query(
+      `SELECT u.id, u.name, u.avatar, COUNT(cl.id)::int as count
+       FROM design_checklist cl
+       JOIN design_cards c ON cl.card_id = c.id
+       JOIN users u ON c.designer_id = u.id
+       WHERE cl.created_at >= $1
+       GROUP BY u.id, u.name, u.avatar
+       ORDER BY count DESC`,
+      [monthStart]
+    );
+
+    const monthName = now.toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+    res.json({
+      month: monthName.charAt(0).toUpperCase() + monthName.slice(1),
+      total: total.rows[0].total,
+      perEditor: perEditor.rows,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Erro' }); }
 });
 
 // Analytics (admin only)

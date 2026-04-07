@@ -127,6 +127,7 @@ export const design = {
   addCheckItem: (cardId, text, section) => request(`/design/cards/${cardId}/checklist`, { method: 'POST', body: JSON.stringify({ text, section: section || null }) }),
   toggleCheckItem: (id) => request(`/design/checklist/${id}/toggle`, { method: 'PATCH' }),
   deleteCheckItem: (id) => request(`/design/checklist/${id}`, { method: 'DELETE' }),
+  reorderChecklist: (items) => request('/design/checklist/reorder', { method: 'PATCH', body: JSON.stringify({ items }) }),
   comments: (cardId) => request(`/design/cards/${cardId}/comments`),
   addComment: (cardId, content) => request(`/design/cards/${cardId}/comments`, { method: 'POST', body: JSON.stringify({ content }) }),
   history: (cardId) => request(`/design/cards/${cardId}/history`),
@@ -167,4 +168,7 @@ export const design = {
   links: (cardId) => request(`/design/cards/${cardId}/links`),
   addLink: (cardId, url, label) => request(`/design/cards/${cardId}/links`, { method: 'POST', body: JSON.stringify({ url, label }) }),
   deleteLink: (id) => request(`/design/links/${id}`, { method: 'DELETE' }),
+  reorderLinks: (items) => request('/design/links/reorder', { method: 'PATCH', body: JSON.stringify({ items }) }),
+  reorderAttachments: (items) => request('/design/attachments/reorder', { method: 'PATCH', body: JSON.stringify({ items }) }),
+  videoStats: () => request('/design/video-stats'),
 };

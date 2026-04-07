@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { design as designApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import styles from '../styles/DesignCardModal.module.css';
@@ -29,6 +29,8 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
   const [linksList, setLinksList] = useState([]);
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [newLinkLabel, setNewLinkLabel] = useState('');
+  const [drag, setDrag] = useState({ type: null, item: null, over: null });
+  const dragRef = useRef(null);
 
   const loadAttachments = () => designApi.attachments(card.id).then(setAttachList).catch(() => {});
   const loadLinks = () => designApi.links(card.id).then(setLinksList).catch(() => {});
@@ -122,6 +124,59 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
     await designApi.deleteCheckItem(id);
     designApi.checklist(card.id).then(setChecklist);
   };
+
+  // Drag-and-drop genérico para checklist, anexos e links
+  const makeDragHandlers = (type, list, setList, reorderFn, reloadFn) => ({
+    onStart: (e, item) => {
+      e.stopPropagation();
+      dragRef.current = { type, item };
+      setDrag({ type, item, over: null });
+      e.dataTransfer.setData('text/plain', String(item.id));
+      e.dataTransfer.effectAllowed = 'move';
+    },
+    onEnd: (e) => {
+      e.stopPropagation();
+      setDrag({ type: null, item: null, over: null });
+      dragRef.current = null;
+    },
+    onOver: (e, item) => {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'move';
+      if (dragRef.current?.type === type && dragRef.current.item.id !== item.id) {
+        setDrag(d => ({ ...d, over: item }));
+      }
+    },
+    onEnter: (e) => { e.preventDefault(); e.stopPropagation(); },
+    onDrop: async (e, targetItem) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const source = dragRef.current?.item;
+      if (!source || dragRef.current?.type !== type || source.id === targetItem.id) {
+        setDrag({ type: null, item: null, over: null }); dragRef.current = null; return;
+      }
+      const newList = [...list];
+      const srcIdx = newList.findIndex(i => i.id === source.id);
+      const tgtIdx = newList.findIndex(i => i.id === targetItem.id);
+      if (srcIdx === -1 || tgtIdx === -1) return;
+      const [moved] = newList.splice(srcIdx, 1);
+      if (type === 'check') moved.section = targetItem.section;
+      newList.splice(tgtIdx, 0, moved);
+      const updates = newList.map((item, idx) => {
+        const u = { id: item.id, sort_order: idx };
+        if (type === 'check') u.section = item.section || null;
+        return u;
+      });
+      setList(newList);
+      setDrag({ type: null, item: null, over: null });
+      dragRef.current = null;
+      try { await reorderFn(updates); } catch { reloadFn(); }
+    },
+  });
+
+  const checkDrag = makeDragHandlers('check', checklist, setChecklist, designApi.reorderChecklist, () => designApi.checklist(card.id).then(setChecklist));
+  const attachDrag = makeDragHandlers('attach', attachList, setAttachList, designApi.reorderAttachments, loadAttachments);
+  const linkDrag = makeDragHandlers('link', linksList, setLinksList, designApi.reorderLinks, loadLinks);
 
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
@@ -290,13 +345,28 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
                         </div>
                       )}
                       <div className={styles.checkList}>
-                        {items.map(item => (
-                          <div key={item.id} className={styles.checkItem}>
-                            <input type="checkbox" checked={item.checked} onChange={() => handleToggleCheck(item.id)} />
-                            <span className={item.checked ? styles.checkDone : ''}>{item.text}</span>
-                            {(isAdmin || isMyCard) && <button className={styles.checkDel} onClick={() => handleDeleteCheck(item.id)}>✕</button>}
-                          </div>
-                        ))}
+                        {items.map(item => {
+                          const canEdit = isAdmin || isMyCard;
+                          const isDragging = drag.type === 'check' && drag.item?.id === item.id;
+                          const isOver = drag.type === 'check' && drag.over?.id === item.id && !isDragging;
+                          return (
+                            <div
+                              key={item.id}
+                              className={`${styles.checkItem} ${isDragging ? styles.dragItemActive : ''} ${isOver ? styles.dragItemOver : ''}`}
+                              draggable={canEdit}
+                              onDragStart={e => checkDrag.onStart(e, item)}
+                              onDragEnd={checkDrag.onEnd}
+                              onDragOver={e => checkDrag.onOver(e, item)}
+                              onDragEnter={checkDrag.onEnter}
+                              onDrop={e => checkDrag.onDrop(e, item)}
+                            >
+                              {canEdit && <span className={styles.dragHandle}>⠿</span>}
+                              <input type="checkbox" checked={item.checked} onChange={() => handleToggleCheck(item.id)} />
+                              <span className={item.checked ? styles.checkDone : ''}>{item.text}</span>
+                              {canEdit && <button className={styles.checkDel} onClick={() => handleDeleteCheck(item.id)}>✕</button>}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   );
@@ -333,28 +403,43 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
             <div className={styles.section}>
               {attachList.length > 0 && (
                 <div className={styles.attachGrid}>
-                  {attachList.map(a => (
-                    <div key={a.id} className={styles.attachItem}>
-                      {isImage(a.mime_type) ? (
-                        <a href={`/uploads/${a.filename}`} target="_blank" rel="noreferrer" className={styles.attachThumb}>
-                          <img src={`/uploads/${a.filename}`} alt={a.original_name} />
-                        </a>
-                      ) : isVideo(a.mime_type) ? (
-                        <video src={`/uploads/${a.filename}`} controls className={styles.attachVideo} />
-                      ) : (
-                        <a href={`/uploads/${a.filename}`} target="_blank" rel="noreferrer" className={styles.attachFileIcon}>
-                          <span>{getFileIcon(a.mime_type)}</span>
-                        </a>
-                      )}
-                      <div className={styles.attachInfo}>
-                        <a href={`/uploads/${a.filename}`} target="_blank" rel="noreferrer" className={styles.attachName}>{a.original_name}</a>
-                        <span className={styles.attachMeta}>{formatSize(a.size)} — {a.user_name}</span>
+                  {attachList.map(a => {
+                    const canEdit = a.user_id === user?.id || isAdmin;
+                    const isDragging = drag.type === 'attach' && drag.item?.id === a.id;
+                    const isOver = drag.type === 'attach' && drag.over?.id === a.id && !isDragging;
+                    return (
+                      <div
+                        key={a.id}
+                        className={`${styles.attachItem} ${isDragging ? styles.dragItemActive : ''} ${isOver ? styles.dragItemOver : ''}`}
+                        draggable={canEdit}
+                        onDragStart={e => attachDrag.onStart(e, a)}
+                        onDragEnd={attachDrag.onEnd}
+                        onDragOver={e => attachDrag.onOver(e, a)}
+                        onDragEnter={attachDrag.onEnter}
+                        onDrop={e => attachDrag.onDrop(e, a)}
+                      >
+                        {canEdit && <span className={styles.dragHandle}>⠿</span>}
+                        {isImage(a.mime_type) ? (
+                          <a href={`/uploads/${a.filename}`} target="_blank" rel="noreferrer" className={styles.attachThumb}>
+                            <img src={`/uploads/${a.filename}`} alt={a.original_name} />
+                          </a>
+                        ) : isVideo(a.mime_type) ? (
+                          <video src={`/uploads/${a.filename}`} controls className={styles.attachVideo} />
+                        ) : (
+                          <a href={`/uploads/${a.filename}`} target="_blank" rel="noreferrer" className={styles.attachFileIcon}>
+                            <span>{getFileIcon(a.mime_type)}</span>
+                          </a>
+                        )}
+                        <div className={styles.attachInfo}>
+                          <a href={`/uploads/${a.filename}`} target="_blank" rel="noreferrer" className={styles.attachName}>{a.original_name}</a>
+                          <span className={styles.attachMeta}>{formatSize(a.size)} — {a.user_name}</span>
+                        </div>
+                        {canEdit && (
+                          <button className={styles.attachDel} onClick={() => handleDeleteAttach(a.id)}>✕</button>
+                        )}
                       </div>
-                      {(a.user_id === user?.id || isAdmin) && (
-                        <button className={styles.attachDel} onClick={() => handleDeleteAttach(a.id)}>✕</button>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
               {attachList.length === 0 && <p className={styles.empty}>Nenhum anexo.</p>}
@@ -370,19 +455,34 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
                 <h4 className={styles.linksTitle}>Links</h4>
                 {linksList.length > 0 && (
                   <div className={styles.linksList}>
-                    {linksList.map(l => (
-                      <div key={l.id} className={styles.linkItem}>
-                        <span className={styles.linkIcon}>🔗</span>
-                        <div className={styles.linkInfo}>
-                          <a href={l.url} target="_blank" rel="noreferrer" className={styles.linkUrl}>{l.label || l.url}</a>
-                          {l.label && <span className={styles.linkMeta}>{l.url}</span>}
-                          <span className={styles.linkMeta}>{l.user_name}</span>
+                    {linksList.map(l => {
+                      const canEdit = l.user_id === user?.id || isAdmin;
+                      const isDragging = drag.type === 'link' && drag.item?.id === l.id;
+                      const isOver = drag.type === 'link' && drag.over?.id === l.id && !isDragging;
+                      return (
+                        <div
+                          key={l.id}
+                          className={`${styles.linkItem} ${isDragging ? styles.dragItemActive : ''} ${isOver ? styles.dragItemOver : ''}`}
+                          draggable={canEdit}
+                          onDragStart={e => linkDrag.onStart(e, l)}
+                          onDragEnd={linkDrag.onEnd}
+                          onDragOver={e => linkDrag.onOver(e, l)}
+                          onDragEnter={linkDrag.onEnter}
+                          onDrop={e => linkDrag.onDrop(e, l)}
+                        >
+                          {canEdit && <span className={styles.dragHandle}>⠿</span>}
+                          <span className={styles.linkIcon}>🔗</span>
+                          <div className={styles.linkInfo}>
+                            <a href={l.url} target="_blank" rel="noreferrer" className={styles.linkUrl}>{l.label || l.url}</a>
+                            {l.label && <span className={styles.linkMeta}>{l.url}</span>}
+                            <span className={styles.linkMeta}>{l.user_name}</span>
+                          </div>
+                          {canEdit && (
+                            <button className={styles.attachDel} onClick={() => handleDeleteLink(l.id)}>✕</button>
+                          )}
                         </div>
-                        {(l.user_id === user?.id || isAdmin) && (
-                          <button className={styles.attachDel} onClick={() => handleDeleteLink(l.id)}>✕</button>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
                 {linksList.length === 0 && <p className={styles.empty}>Nenhum link.</p>}

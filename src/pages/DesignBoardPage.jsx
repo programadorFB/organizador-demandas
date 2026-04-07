@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { design as designApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import DesignCardModal from '../components/DesignCardModal';
+import BgEffects from '../components/BgEffects';
 import styles from '../styles/DesignBoard.module.css';
 
 const ALL_COLUMNS = [
@@ -40,6 +41,9 @@ export default function DesignBoardPage() {
   const bgKey = `design_bg_${user?.id || 'default'}`;
   const [bgImage, setBgImage] = useState(() => localStorage.getItem(bgKey) || '');
   const [showBgInput, setShowBgInput] = useState(false);
+  const effectKey = `design_effect_${user?.id || 'default'}`;
+  const [bgEffect, setBgEffect] = useState(() => localStorage.getItem(effectKey) || 'none');
+  const [showStylePanel, setShowStylePanel] = useState(false);
   const [dragCardStatus, setDragCardStatus] = useState(null);
   const [showManageDesigners, setShowManageDesigners] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -52,6 +56,11 @@ export default function DesignBoardPage() {
   const [ncShowNewSection, setNcShowNewSection] = useState(false);
   const [ncNewSectionName, setNcNewSectionName] = useState('');
   const [ncFiles, setNcFiles] = useState([]);
+  const [ncLinks, setNcLinks] = useState([]);
+  const [ncNewLinkUrl, setNcNewLinkUrl] = useState('');
+  const [ncNewLinkLabel, setNcNewLinkLabel] = useState('');
+  const [videoStats, setVideoStats] = useState(null);
+  const [showVideoStats, setShowVideoStats] = useState(false);
 
   const loadCards = useCallback(async () => {
     try {
@@ -80,6 +89,8 @@ export default function DesignBoardPage() {
         const s = await designApi.stats();
         setStats(s);
       }
+      const vs = await designApi.videoStats();
+      setVideoStats(vs);
     } catch { /* ignore */ }
   }, [isDesignAdmin, user?.id]);
 
@@ -102,6 +113,11 @@ export default function DesignBoardPage() {
     setBgImage(url);
     localStorage.setItem(bgKey, url);
     setShowBgInput(false);
+  };
+
+  const handleEffectChange = (effect) => {
+    setBgEffect(effect);
+    localStorage.setItem(effectKey, effect);
   };
 
   const handleCreateDesigner = async (e) => {
@@ -175,9 +191,14 @@ export default function DesignBoardPage() {
       if (ncFiles.length > 0) {
         await designApi.uploadAttachments(card.id, ncFiles);
       }
+      // Adicionar links
+      for (const link of ncLinks) {
+        await designApi.addLink(card.id, link.url, link.label || null);
+      }
       setNewCard({ title: '', expert_name: '', delivery_type: '', priority: 'normal', designer_id: '', start_date: '', deadline: '', estimated_hours: '', description: '', status: 'demanda' });
       setNcChecklist([]);
       setNcFiles([]);
+      setNcLinks([]);
       setNcNewItem('');
       setNcNewSection('');
       setShowNewCard(false);
@@ -203,6 +224,13 @@ export default function DesignBoardPage() {
     e.target.value = '';
   };
   const ncRemoveFile = (idx) => setNcFiles(prev => prev.filter((_, i) => i !== idx));
+  const ncAddLink = () => {
+    if (!ncNewLinkUrl.trim()) return;
+    setNcLinks(prev => [...prev, { url: ncNewLinkUrl, label: ncNewLinkLabel || null }]);
+    setNcNewLinkUrl('');
+    setNcNewLinkLabel('');
+  };
+  const ncRemoveLink = (idx) => setNcLinks(prev => prev.filter((_, i) => i !== idx));
   const formatSize = (bytes) => {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -251,6 +279,13 @@ export default function DesignBoardPage() {
             <div className={`${styles.statBox} ${stats.urgent > 0 ? styles.statUrgent : ''}`}><span className={styles.statVal}>{stats.urgent}</span><span className={styles.statLbl}>Urgentes</span></div>
           </div>
         )}
+        {videoStats && (
+          <button className={styles.videoStatsBtn} onClick={() => setShowVideoStats(!showVideoStats)}>
+            <span className={styles.videoIcon}>🎬</span>
+            <span className={styles.videoTotal}>{videoStats.total}</span>
+            <span className={styles.videoLabel}>Vídeos no Mês</span>
+          </button>
+        )}
         <div className={styles.headerRight}>
           <button className={styles.notifBtn} onClick={() => { setShowNotifs(!showNotifs); if (!showNotifs) loadNotifications(); }}>
             <span>🔔</span>
@@ -270,6 +305,7 @@ export default function DesignBoardPage() {
             </>
           )}
           <button className={styles.bgBtn} onClick={() => setShowBgInput(!showBgInput)} title="Plano de fundo">🖼</button>
+          <button className={styles.bgBtn} onClick={() => setShowStylePanel(!showStylePanel)} title="Efeitos visuais">✨</button>
           <button className={styles.avatarBtn} onClick={() => setShowProfile(!showProfile)}>
             {myAvatar ? <img src={`/uploads/${myAvatar}`} alt="" className={styles.avatarImg} /> : <span className={styles.avatarInitials}>{user?.name?.slice(0, 2).toUpperCase()}</span>}
           </button>
@@ -288,6 +324,30 @@ export default function DesignBoardPage() {
           {bgImage && <button className={styles.btnGhost} onClick={() => handleBgSave('')}>Remover</button>}
         </div>
       )}
+
+      {/* Style Panel */}
+      {showStylePanel && (
+        <div className={styles.bgInputBar}>
+          <span className={styles.styleLabel}>Efeito Visual:</span>
+          {[
+            { key: 'none', label: 'Nenhum', icon: '🚫' },
+            { key: 'sparks', label: 'Fagulhas', icon: '🔥' },
+            { key: 'money', label: 'Dinheiro', icon: '💰' },
+            { key: 'lightning', label: 'Raios', icon: '⚡' },
+          ].map(opt => (
+            <button
+              key={opt.key}
+              className={`${styles.effectBtn} ${bgEffect === opt.key ? styles.effectBtnActive : ''}`}
+              onClick={() => handleEffectChange(opt.key)}
+            >
+              <span>{opt.icon}</span> {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Background Effects */}
+      <BgEffects effect={bgEffect} />
 
       {/* New Card Modal */}
       {showNewCard && (
@@ -422,6 +482,29 @@ export default function DesignBoardPage() {
                     <input type="file" multiple onChange={ncAddFiles} style={{ display: 'none' }} />
                     <span className={styles.btnGhost}>+ Selecionar Arquivos</span>
                   </label>
+                </div>
+              </div>
+
+              {/* Links */}
+              <div className={styles.ncSection}>
+                <label className={styles.ncLabel}>Links</label>
+                <div className={styles.ncLinksWrap}>
+                  {ncLinks.length > 0 && (
+                    <div className={styles.ncLinkList}>
+                      {ncLinks.map((l, i) => (
+                        <div key={i} className={styles.ncLinkItem}>
+                          <span className={styles.ncLinkIcon}>🔗</span>
+                          <span className={styles.ncLinkText}>{l.label || l.url}</span>
+                          <button type="button" className={styles.ncCheckDel} onClick={() => ncRemoveLink(i)}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className={styles.ncLinkAdd}>
+                    <input placeholder="https://..." value={ncNewLinkUrl} onChange={e => setNcNewLinkUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), ncAddLink())} />
+                    <input placeholder="Nome (opcional)" value={ncNewLinkLabel} onChange={e => setNcNewLinkLabel(e.target.value)} onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), ncAddLink())} className={styles.ncLinkLabelInput} />
+                    <button type="button" className={styles.btnGold} onClick={ncAddLink}>+</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -568,6 +651,38 @@ export default function DesignBoardPage() {
           onClose={() => setSelectedCard(null)}
           onUpdate={() => { loadCards(); loadMeta(); }}
         />
+      )}
+
+      {/* Vídeos — renderizado fora do header como portal fixo */}
+      {showVideoStats && videoStats && (
+        <div className={styles.notifPortal}>
+          <div className={styles.notifOverlay} onClick={() => setShowVideoStats(false)} />
+          <div className={styles.videoDropdown}>
+            <div className={styles.videoDropHeader}>
+              <span>{videoStats.month}</span>
+              <button className={styles.ncClose} onClick={() => setShowVideoStats(false)}>✕</button>
+            </div>
+            <div className={styles.videoDropTotal}>
+              <span className={styles.videoDropTotalVal}>{videoStats.total}</span>
+              <span className={styles.videoDropTotalLbl}>vídeos produzidos</span>
+            </div>
+            {videoStats.perEditor.length > 0 ? (
+              <div className={styles.videoEditorList}>
+                {videoStats.perEditor.map(e => (
+                  <div key={e.id} className={styles.videoEditorRow}>
+                    <div className={styles.videoEditorAvatar}>
+                      {e.avatar ? <img src={`/uploads/${e.avatar}`} alt="" /> : <span>{e.name.slice(0, 2).toUpperCase()}</span>}
+                    </div>
+                    <span className={styles.videoEditorName}>{e.name}</span>
+                    <span className={styles.videoEditorCount}>{e.count}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className={styles.videoEmpty}>Nenhum vídeo registrado este mês.</p>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Notificações — renderizado fora do header/board */}
