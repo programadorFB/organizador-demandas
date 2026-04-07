@@ -116,11 +116,28 @@ export default function DesignAnalyticsPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState(null);
+  const [expertStats, setExpertStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [expandedMonths, setExpandedMonths] = useState({});
 
   useEffect(() => {
-    designApi.analytics().then(d => { setData(d); setLoading(false); }).catch(() => setLoading(false));
+    Promise.all([
+      designApi.analytics(),
+      designApi.expertVideoStats(),
+    ]).then(([d, ev]) => {
+      setData(d);
+      setExpertStats(ev);
+      // Expandir o mês atual por padrão
+      if (ev?.months?.length) {
+        setExpandedMonths({ [ev.months[0].month_key]: true });
+      }
+      setLoading(false);
+    }).catch(() => setLoading(false));
   }, []);
+
+  const toggleMonth = (key) => {
+    setExpandedMonths(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
   if (loading) return <div className={styles.page}><div className={styles.loading}>Carregando...</div></div>;
   if (!data) return <div className={styles.page}><div className={styles.loading}>Erro ao carregar dados</div></div>;
@@ -168,6 +185,43 @@ export default function DesignAnalyticsPage() {
             </div>
           ))}
         </div>
+
+        {/* Vídeos por Expert — histórico mensal */}
+        {expertStats?.months?.length > 0 && (
+          <>
+            <h2 className={styles.sectionTitle}>Vídeos por Expert</h2>
+            <div className={styles.expertMonthsList}>
+              {expertStats.months.map(m => (
+                <div key={m.month_key} className={styles.expertMonthBlock}>
+                  <button className={styles.expertMonthHeader} onClick={() => toggleMonth(m.month_key)}>
+                    <div className={styles.expertMonthLeft}>
+                      <span className={styles.expertMonthArrow}>{expandedMonths[m.month_key] ? '▼' : '▶'}</span>
+                      <span className={styles.expertMonthTitle}>{m.month_label}</span>
+                    </div>
+                    <div className={styles.expertMonthSummary}>
+                      <span className={styles.expertMonthBadge}>{m.total_experts} expert{m.total_experts !== 1 ? 's' : ''}</span>
+                      <span className={styles.expertMonthBadgeGold}>{m.total_videos} vídeo{m.total_videos !== 1 ? 's' : ''}</span>
+                    </div>
+                  </button>
+                  {expandedMonths[m.month_key] && (
+                    <div className={styles.expertGrid}>
+                      {m.experts.map((ex, i) => (
+                        <div key={i} className={styles.expertCard}>
+                          <div className={styles.expertAvatar}>{ex.expert_name.slice(0, 2).toUpperCase()}</div>
+                          <div className={styles.expertInfo}>
+                            <span className={styles.expertName}>{ex.expert_name}</span>
+                            <span className={styles.expertCount}>{ex.video_count} vídeo{ex.video_count !== 1 ? 's' : ''}</span>
+                          </div>
+                          <span className={styles.expertCountBig}>{ex.video_count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* Charts grid */}
         <div className={styles.chartsGrid}>

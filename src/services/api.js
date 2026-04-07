@@ -171,6 +171,7 @@ export const design = {
   reorderLinks: (items) => request('/design/links/reorder', { method: 'PATCH', body: JSON.stringify({ items }) }),
   reorderAttachments: (items) => request('/design/attachments/reorder', { method: 'PATCH', body: JSON.stringify({ items }) }),
   videoStats: () => request('/design/video-stats'),
+  expertVideoStats: () => request('/design/expert-video-stats'),
   getPreferences: () => request('/design/preferences'),
   savePreferences: (prefs) => request('/design/preferences', { method: 'PATCH', body: JSON.stringify(prefs) }),
 };

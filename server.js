@@ -1244,6 +1244,62 @@ app.get('/api/design/video-stats', authMiddleware, roleMiddleware(...designAcces
   } catch (err) { console.error(err); res.status(500).json({ error: 'Erro' }); }
 });
 
+// Expert video stats — historico mensal completo
+app.get('/api/design/expert-video-stats', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    // Contagem por expert por mes
+    const perExpertMonth = await pool.query(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', cl.created_at), 'YYYY-MM') as month_key,
+        TO_CHAR(DATE_TRUNC('month', cl.created_at), 'TMMonth YYYY') as month_label,
+        c.expert_name,
+        COUNT(cl.id)::int as video_count
+      FROM design_checklist cl
+      JOIN design_cards c ON cl.card_id = c.id
+      WHERE c.expert_name IS NOT NULL AND c.expert_name != ''
+      GROUP BY month_key, month_label, c.expert_name
+      ORDER BY month_key DESC, video_count DESC
+    `);
+
+    // Resumo por mes
+    const monthlySummary = await pool.query(`
+      SELECT
+        TO_CHAR(DATE_TRUNC('month', cl.created_at), 'YYYY-MM') as month_key,
+        TO_CHAR(DATE_TRUNC('month', cl.created_at), 'TMMonth YYYY') as month_label,
+        COUNT(DISTINCT c.expert_name)::int as total_experts,
+        COUNT(cl.id)::int as total_videos
+      FROM design_checklist cl
+      JOIN design_cards c ON cl.card_id = c.id
+      WHERE c.expert_name IS NOT NULL AND c.expert_name != ''
+      GROUP BY month_key, month_label
+      ORDER BY month_key DESC
+    `);
+
+    // Agrupar dados por mes
+    const months = {};
+    monthlySummary.rows.forEach(row => {
+      months[row.month_key] = {
+        month_key: row.month_key,
+        month_label: row.month_label.charAt(0).toUpperCase() + row.month_label.slice(1),
+        total_experts: row.total_experts,
+        total_videos: row.total_videos,
+        experts: [],
+      };
+    });
+
+    perExpertMonth.rows.forEach(row => {
+      if (months[row.month_key]) {
+        months[row.month_key].experts.push({
+          expert_name: row.expert_name,
+          video_count: row.video_count,
+        });
+      }
+    });
+
+    res.json({ months: Object.values(months) });
+  } catch (err) { console.error('Expert video stats error:', err); res.status(500).json({ error: 'Erro' }); }
+});
+
 // Analytics (admin only)
 app.get('/api/design/analytics', authMiddleware, roleMiddleware(...designAdmin), async (req, res) => {
   try {
