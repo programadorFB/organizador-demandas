@@ -1,5 +1,3 @@
-import { isDemoMode, mockSales, mockSalesChat, mockKnowledge, mockKommo } from '../mocks/salesMock';
-
 const API = '/api';
 
 function headers() {
@@ -179,7 +177,7 @@ export const design = {
 };
 
 // Sales Panel
-const _salesReal = {
+export const sales = {
   sellers: () => request('/sales/sellers'),
   createSeller: (body) => request('/sales/sellers', { method: 'POST', body: JSON.stringify(body) }),
   toggleSeller: (id) => request(`/sales/sellers/${id}/toggle-active`, { method: 'PATCH' }),
@@ -202,7 +200,7 @@ const _salesReal = {
   },
 };
 
-const _salesChatReal = {
+export const salesChat = {
   messages: (before) => request(`/sales/chat${before ? `?before=${before}` : ''}`),
   send: (content, reply_to) => request('/sales/chat', { method: 'POST', body: JSON.stringify({ content, reply_to }) }),
   newMessages: (after) => request(`/sales/chat/new?after=${after}`),
@@ -214,7 +212,7 @@ const _salesChatReal = {
   markRead: () => request('/sales/chat/mark-read', { method: 'PATCH' }),
 };
 
-const _knowledgeReal = {
+export const knowledge = {
   categories: () => request('/knowledge/categories'),
   createCategory: (body) => request('/knowledge/categories', { method: 'POST', body: JSON.stringify(body) }),
   deleteCategory: (id) => request(`/knowledge/categories/${id}`, { method: 'DELETE' }),
@@ -228,7 +226,7 @@ const _knowledgeReal = {
   deleteArticle: (id) => request(`/knowledge/articles/${id}`, { method: 'DELETE' }),
 };
 
-const _kommoReal = {
+export const kommo = {
   getConfig: () => request('/kommo/config'),
   saveConfig: (body) => request('/kommo/config', { method: 'POST', body: JSON.stringify(body) }),
   disconnect: () => request('/kommo/disconnect', { method: 'POST' }),
@@ -245,16 +243,3 @@ const _kommoReal = {
   getWebhookEvents: (limit = 50) => request(`/kommo/webhook-events?limit=${limit}`),
 };
 
-// Proxy: usa mock se demo_mode ativo, senao usa real
-function demoProxy(real, mock) {
-  return new Proxy({}, {
-    get(_, prop) {
-      return (...args) => isDemoMode() ? mock[prop](...args) : real[prop](...args);
-    }
-  });
-}
-
-export const sales = demoProxy(_salesReal, mockSales);
-export const kommo = demoProxy(_kommoReal, mockKommo);
-export const salesChat = demoProxy(_salesChatReal, mockSalesChat);
-export const knowledge = demoProxy(_knowledgeReal, mockKnowledge);
