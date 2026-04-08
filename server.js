@@ -4,7 +4,7 @@ import pg from 'pg';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import cors from 'cors';
-import { readFileSync, unlinkSync } from 'fs';
+import { readFileSync, unlinkSync, existsSync, mkdirSync } from 'fs';
 import { exec } from 'child_process';
 import multer from 'multer';
 import path from 'path';
@@ -19,6 +19,10 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Garantir que pasta de uploads exista
+if (!existsSync('uploads')) mkdirSync('uploads', { recursive: true });
 
 // Upload config
 const storage = multer.diskStorage({
@@ -413,7 +417,7 @@ app.get('/api/users', authMiddleware, roleMiddleware('admin', 'supervisor'), asy
 app.patch('/api/users/:id/role', authMiddleware, roleMiddleware('admin'), async (req, res) => {
   try {
     const { role } = req.body;
-    if (!['admin', 'supervisor', 'user', 'designer', 'design_admin'].includes(role)) {
+    if (!['admin', 'supervisor', 'user', 'designer', 'design_admin', 'sales_admin', 'vendedora'].includes(role)) {
       return res.status(400).json({ error: 'Role inválida' });
     }
     const result = await pool.query(
@@ -1379,6 +1383,1319 @@ app.get('/api/design/analytics', authMiddleware, roleMiddleware(...designAdmin),
   } catch (err) { console.error('Analytics error:', err); res.status(500).json({ error: 'Erro ao gerar analytics' }); }
 });
 
+// ─── Sales Panel (Sara & Vendedoras) ───
+const salesAdmin = ['admin', 'sales_admin'];
+const salesAccess = ['admin', 'sales_admin', 'vendedora'];
+
+// Listar vendedoras (Sara vê todas)
+app.get('/api/sales/sellers', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT s.*, u.name, u.email, u.avatar
+      FROM sellers s
+      JOIN users u ON s.user_id = u.id
+      ORDER BY u.name
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao listar vendedoras' });
+  }
+});
+
+// Adicionar vendedora
+app.post('/api/sales/sellers', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const { name, email, password, shift, goal_leads, goal_sales, goal_revenue } = req.body;
+    // Criar usuário se não existir (ou usar existente)
+    let userResult = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
+    let userId;
+    if (userResult.rows.length) {
+      userId = userResult.rows[0].id;
+      await pool.query("UPDATE users SET role = 'vendedora' WHERE id = $1", [userId]);
+    } else {
+      const hash = await bcrypt.hash(password || '123456', 10);
+      userResult = await pool.query(
+        "INSERT INTO users (name, email, password_hash, role) VALUES ($1, $2, $3, 'vendedora') RETURNING id",
+        [name, email, hash]
+      );
+      userId = userResult.rows[0].id;
+    }
+    // Criar perfil de vendedora
+    const result = await pool.query(
+      `INSERT INTO sellers (user_id, shift, monthly_goal_leads, monthly_goal_sales, monthly_goal_revenue)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (user_id) DO UPDATE SET shift=$2, monthly_goal_leads=$3, monthly_goal_sales=$4, monthly_goal_revenue=$5, active=true, updated_at=NOW()
+       RETURNING *`,
+      [userId, shift || 'completo', goal_leads || 0, goal_sales || 0, goal_revenue || 0]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao criar vendedora' });
+  }
+});
+
+// Alternar status da vendedora
+app.patch('/api/sales/sellers/:id/toggle-active', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const result = await pool.query(
+      'UPDATE sellers SET active = NOT active, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao alterar status' });
+  }
+});
+
+// Enviar relatório (Vendedora)
+app.post('/api/sales/reports', authMiddleware, roleMiddleware(...salesAccess), async (req, res) => {
+  try {
+    const { report_date, report_type, leads_received, leads_responded, conversions, sales_closed, revenue, notes } = req.body;
+    // Buscar ID da vendedora pelo user_id logado
+    const seller = await pool.query('SELECT id FROM sellers WHERE user_id = $1 AND active = true', [req.user.id]);
+    if (!seller.rows.length) return res.status(403).json({ error: 'Perfil de vendedora não encontrado ou inativo' });
+    const sellerId = seller.rows[0].id;
+
+    const result = await pool.query(
+      `INSERT INTO sales_reports (seller_id, report_date, report_type, leads_received, leads_responded, conversions, sales_closed, revenue, notes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       ON CONFLICT (seller_id, report_date, report_type)
+       DO UPDATE SET leads_received=$4, leads_responded=$5, conversions=$6, sales_closed=$7, revenue=$8, notes=$9, updated_at=NOW()
+       RETURNING *`,
+      [sellerId, report_date || new Date(), report_type, leads_received || 0, leads_responded || 0, conversions || 0, sales_closed || 0, revenue || 0, notes || '']
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao enviar relatório' });
+  }
+});
+
+// Stats Sara (Geral)
+app.get('/api/sales/stats', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const { date, shift } = req.query;
+    const filterDate = date || new Date().toISOString().split('T')[0];
+
+    // Stats diárias por vendedora
+    const daily = await pool.query(`
+      SELECT s.id as seller_id, u.name, u.avatar,
+        COALESCE(SUM(r.leads_received), 0)::int as leads_received,
+        COALESCE(SUM(r.leads_responded), 0)::int as leads_responded,
+        COALESCE(SUM(r.conversions), 0)::int as conversions,
+        COALESCE(SUM(r.sales_closed), 0)::int as sales_closed,
+        COALESCE(SUM(r.revenue), 0)::numeric(12,2) as revenue,
+        CASE WHEN COALESCE(SUM(r.leads_received), 0) > 0
+          THEN ROUND((SUM(r.sales_closed)::numeric / SUM(r.leads_received)) * 100, 1)
+          ELSE 0 END as conversion_rate
+      FROM sellers s
+      JOIN users u ON s.user_id = u.id
+      LEFT JOIN sales_reports r ON s.id = r.seller_id AND r.report_date = $1
+      WHERE s.active = true ${shift ? 'AND r.report_type = $2' : ''}
+      GROUP BY s.id, u.name, u.avatar
+      ORDER BY revenue DESC
+    `, shift ? [filterDate, shift] : [filterDate]);
+
+    // Stats mensais
+    const monthly = await pool.query(`
+      SELECT s.id as seller_id,
+        COALESCE(SUM(r.leads_received), 0)::int as leads_received,
+        COALESCE(SUM(r.sales_closed), 0)::int as sales_closed,
+        COALESCE(SUM(r.revenue), 0)::numeric(12,2) as revenue,
+        s.monthly_goal_revenue
+      FROM sellers s
+      LEFT JOIN sales_reports r ON s.id = r.seller_id
+        AND r.report_date >= DATE_TRUNC('month', $1::date)
+        AND r.report_date <= (DATE_TRUNC('month', $1::date) + INTERVAL '1 month - 1 day')
+      WHERE s.active = true
+      GROUP BY s.id, s.monthly_goal_revenue
+    `, [filterDate]);
+
+    // Totais gerais do dia
+    const totals = await pool.query(`
+      SELECT
+        COALESCE(SUM(r.leads_received), 0)::int as total_leads,
+        COALESCE(SUM(r.sales_closed), 0)::int as total_sales,
+        COALESCE(SUM(r.revenue), 0)::numeric(12,2) as total_revenue
+      FROM sales_reports r
+      WHERE r.report_date = $1 ${shift ? 'AND r.report_type = $2' : ''}
+    `, shift ? [filterDate, shift] : [filterDate]);
+
+    // ─── Performance Alerts (inteligentes) ───
+    const now = new Date();
+    const currentHour = now.getHours();
+    let alerts = [];
+
+    // 1. Relatórios pendentes
+    if (filterDate === now.toISOString().split('T')[0]) {
+      if (currentHour >= 14) {
+        const missingManha = await pool.query(`
+          SELECT u.name FROM sellers s JOIN users u ON s.user_id = u.id
+          WHERE s.active = true AND NOT EXISTS (
+            SELECT 1 FROM sales_reports r WHERE r.seller_id = s.id AND r.report_date = CURRENT_DATE AND r.report_type = 'manha'
+          )`, []);
+        missingManha.rows.forEach(m => alerts.push({ type: 'warning', msg: `${m.name} ainda nao enviou relatorio da manha` }));
+      }
+      if (currentHour >= 18) {
+        const missingCompleto = await pool.query(`
+          SELECT u.name FROM sellers s JOIN users u ON s.user_id = u.id
+          WHERE s.active = true AND s.shift = 'completo' AND NOT EXISTS (
+            SELECT 1 FROM sales_reports r WHERE r.seller_id = s.id AND r.report_date = CURRENT_DATE AND r.report_type = 'completo'
+          )`, []);
+        missingCompleto.rows.forEach(m => alerts.push({ type: 'warning', msg: `${m.name} ainda nao enviou relatorio completo` }));
+      }
+    }
+
+    // 2. Conversão baixa (< 12%) e taxa de resposta baixa (< 80%)
+    daily.rows.forEach(s => {
+      if (s.leads_received >= 10) {
+        if (parseFloat(s.conversion_rate) < 12) {
+          alerts.push({ type: 'danger', msg: `${s.name} com conversao baixa hoje: ${s.conversion_rate}% (meta: 15%)` });
+        }
+        const respRate = ((s.leads_responded / s.leads_received) * 100).toFixed(1);
+        if (parseFloat(respRate) < 80) {
+          alerts.push({ type: 'danger', msg: `${s.name} respondeu apenas ${respRate}% dos leads hoje (minimo: 85%)` });
+        }
+      }
+    });
+
+    // 3. Ritmo mensal abaixo da meta (projeção)
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const currentDay = new Date(filterDate).getDate();
+    const expectedPct = (currentDay / daysInMonth) * 100;
+    monthly.rows.forEach(ms => {
+      if (parseFloat(ms.monthly_goal_revenue) > 0) {
+        const pct = (parseFloat(ms.revenue) / parseFloat(ms.monthly_goal_revenue)) * 100;
+        if (pct < expectedPct * 0.6 && currentDay >= 10) {
+          alerts.push({ type: 'danger', msg: `Vendedora ID ${ms.seller_id} atingiu ${pct.toFixed(0)}% da meta mensal (esperado ~${expectedPct.toFixed(0)}%)` });
+        }
+        if (pct >= 90) {
+          alerts.push({ type: 'success', msg: `Vendedora ID ${ms.seller_id} ja atingiu ${pct.toFixed(0)}% da meta mensal!` });
+        }
+      }
+    });
+
+    // 4. Destaques positivos do dia
+    daily.rows.forEach(s => {
+      if (s.leads_received >= 10 && parseFloat(s.conversion_rate) >= 25) {
+        alerts.push({ type: 'success', msg: `${s.name} com excelente conversao hoje: ${s.conversion_rate}%!` });
+      }
+    });
+
+    res.json({
+      daily: daily.rows,
+      monthly: monthly.rows,
+      totals: totals.rows[0],
+      alerts
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao buscar stats de vendas' });
+  }
+});
+
+// Individual Stats (Vendedora)
+app.get('/api/sales/seller/dashboard', authMiddleware, roleMiddleware('vendedora', 'admin'), async (req, res) => {
+  try {
+    const seller = await pool.query('SELECT * FROM sellers WHERE user_id = $1', [req.user.id]);
+    if (!seller.rows.length) return res.status(404).json({ error: 'Vendedora não encontrada' });
+    const s = seller.rows[0];
+
+    // Stats do mês atual
+    const monthly = await pool.query(`
+      SELECT
+        COALESCE(SUM(leads_received), 0)::int as leads,
+        COALESCE(SUM(leads_responded), 0)::int as responded,
+        COALESCE(SUM(conversions), 0)::int as conversions,
+        COALESCE(SUM(sales_closed), 0)::int as sales,
+        COALESCE(SUM(revenue), 0)::numeric(12,2) as revenue
+      FROM sales_reports
+      WHERE seller_id = $1
+        AND report_date >= DATE_TRUNC('month', CURRENT_DATE)
+        AND report_date <= (DATE_TRUNC('month', CURRENT_DATE) + INTERVAL '1 month - 1 day')
+    `, [s.id]);
+
+    // Histórico recente (últimos 10 relatórios)
+    const history = await pool.query(`
+      SELECT * FROM sales_reports WHERE seller_id = $1 ORDER BY report_date DESC, report_type DESC LIMIT 10
+    `, [s.id]);
+
+    res.json({
+      seller: s,
+      monthly: monthly.rows[0],
+      history: history.rows
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar dashboard da vendedora' });
+  }
+});
+
+// Resumo mensal geral (Sara)
+app.get('/api/sales/monthly-summary', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const { month, year } = req.query;
+    const m = month || (new Date().getMonth() + 1);
+    const y = year || new Date().getFullYear();
+
+    const summary = await pool.query(`
+      SELECT s.id as seller_id, u.name,
+        COALESCE(SUM(r.leads_received), 0)::int as leads_received,
+        COALESCE(SUM(r.leads_responded), 0)::int as leads_responded,
+        COALESCE(SUM(r.conversions), 0)::int as conversions,
+        COALESCE(SUM(r.sales_closed), 0)::int as sales_closed,
+        COALESCE(SUM(r.revenue), 0)::numeric(12,2) as revenue,
+        CASE WHEN COALESCE(SUM(r.leads_received), 0) > 0
+          THEN ROUND((SUM(r.sales_closed)::numeric / SUM(r.leads_received)) * 100, 1)
+          ELSE 0 END as conversion_rate,
+        COUNT(DISTINCT r.report_date)::int as days_reported,
+        s.monthly_goal_leads, s.monthly_goal_sales, s.monthly_goal_revenue
+      FROM sellers s
+      JOIN users u ON s.user_id = u.id
+      LEFT JOIN sales_reports r ON s.id = r.seller_id
+        AND EXTRACT(MONTH FROM r.report_date) = $1
+        AND EXTRACT(YEAR FROM r.report_date) = $2
+      WHERE s.active = true
+      GROUP BY s.id, u.name, s.monthly_goal_leads, s.monthly_goal_sales, s.monthly_goal_revenue
+      ORDER BY revenue DESC
+    `, [m, y]);
+
+    const totals = await pool.query(`
+      SELECT
+        COALESCE(SUM(r.leads_received), 0)::int as total_leads,
+        COALESCE(SUM(r.leads_responded), 0)::int as total_responded,
+        COALESCE(SUM(r.conversions), 0)::int as total_conversions,
+        COALESCE(SUM(r.sales_closed), 0)::int as total_sales,
+        COALESCE(SUM(r.revenue), 0)::numeric(12,2) as total_revenue
+      FROM sales_reports r
+      JOIN sellers s ON r.seller_id = s.id
+      WHERE s.active = true
+        AND EXTRACT(MONTH FROM r.report_date) = $1
+        AND EXTRACT(YEAR FROM r.report_date) = $2
+    `, [m, y]);
+
+    res.json({ sellers: summary.rows, totals: totals.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao buscar resumo mensal' });
+  }
+});
+
+// Atualizar metas da vendedora (Sara)
+app.patch('/api/sales/sellers/:id/goals', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const { goal_leads, goal_sales, goal_revenue } = req.body;
+    const result = await pool.query(
+      `UPDATE sellers SET monthly_goal_leads = $1, monthly_goal_sales = $2, monthly_goal_revenue = $3, updated_at = NOW()
+       WHERE id = $4 RETURNING *`,
+      [goal_leads || 0, goal_sales || 0, goal_revenue || 0, req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao atualizar metas' });
+  }
+});
+
+// Remover vendedora (desativar user + seller)
+app.delete('/api/sales/sellers/:id', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const seller = await pool.query('SELECT user_id FROM sellers WHERE id = $1', [req.params.id]);
+    if (!seller.rows.length) return res.status(404).json({ error: 'Vendedora não encontrada' });
+    await pool.query('UPDATE sellers SET active = false WHERE id = $1', [req.params.id]);
+    await pool.query("UPDATE users SET active = false WHERE id = $1", [seller.rows[0].user_id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao remover vendedora' });
+  }
+});
+
+// Listar relatórios de uma vendedora (admin)
+app.get('/api/sales/sellers/:id/reports', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { month, year, limit } = req.query;
+    const m = month || (new Date().getMonth() + 1);
+    const y = year || new Date().getFullYear();
+    const lim = Math.min(parseInt(limit) || 100, 500);
+
+    const seller = await pool.query(
+      `SELECT s.*, u.name, u.email FROM sellers s JOIN users u ON s.user_id = u.id WHERE s.id = $1`,
+      [id]
+    );
+    if (!seller.rows.length) return res.status(404).json({ error: 'Vendedora não encontrada' });
+
+    const reports = await pool.query(
+      `SELECT * FROM sales_reports
+       WHERE seller_id = $1
+         AND EXTRACT(MONTH FROM report_date) = $2
+         AND EXTRACT(YEAR FROM report_date) = $3
+       ORDER BY report_date DESC, report_type DESC
+       LIMIT $4`,
+      [id, m, y, lim]
+    );
+
+    const totals = await pool.query(
+      `SELECT
+        COALESCE(SUM(leads_received), 0)::int as total_leads,
+        COALESCE(SUM(leads_responded), 0)::int as total_responded,
+        COALESCE(SUM(conversions), 0)::int as total_conversions,
+        COALESCE(SUM(sales_closed), 0)::int as total_sales,
+        COALESCE(SUM(revenue), 0)::numeric(12,2) as total_revenue,
+        COUNT(DISTINCT report_date)::int as days_reported
+       FROM sales_reports
+       WHERE seller_id = $1
+         AND EXTRACT(MONTH FROM report_date) = $2
+         AND EXTRACT(YEAR FROM report_date) = $3`,
+      [id, m, y]
+    );
+
+    res.json({
+      seller: seller.rows[0],
+      reports: reports.rows,
+      totals: totals.rows[0],
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao listar relatórios da vendedora' });
+  }
+});
+
+// Listar relatórios da vendedora (ela mesma)
+app.get('/api/sales/my-reports', authMiddleware, roleMiddleware(...salesAccess), async (req, res) => {
+  try {
+    const seller = await pool.query('SELECT id FROM sellers WHERE user_id = $1', [req.user.id]);
+    if (!seller.rows.length) return res.status(404).json({ error: 'Vendedora não encontrada' });
+    const { limit } = req.query;
+    const result = await pool.query(
+      `SELECT * FROM sales_reports WHERE seller_id = $1 ORDER BY report_date DESC, report_type DESC LIMIT $2`,
+      [seller.rows[0].id, limit || 30]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao listar relatórios' });
+  }
+});
+
+// ─── Sales Chat (Grupo Interno) ───
+
+// Listar mensagens (paginado)
+app.get('/api/sales/chat', authMiddleware, roleMiddleware(...salesAccess), async (req, res) => {
+  try {
+    const { before, limit } = req.query;
+    const lim = Math.min(parseInt(limit) || 50, 100);
+    let query = `
+      SELECT m.*, u.name as user_name, u.role as user_role,
+        rm.content as reply_content, ru.name as reply_user_name
+      FROM sales_chat_messages m
+      JOIN users u ON m.user_id = u.id
+      LEFT JOIN sales_chat_messages rm ON m.reply_to = rm.id
+      LEFT JOIN users ru ON rm.user_id = ru.id
+      WHERE m.deleted = false
+    `;
+    const params = [];
+    if (before) {
+      params.push(before);
+      query += ` AND m.id < $${params.length}`;
+    }
+    query += ` ORDER BY m.created_at DESC LIMIT $${params.length + 1}`;
+    params.push(lim);
+
+    const result = await pool.query(query, params);
+    res.json(result.rows.reverse());
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Erro ao listar mensagens' });
+  }
+});
+
+// Enviar mensagem
+app.post('/api/sales/chat', authMiddleware, roleMiddleware(...salesAccess), async (req, res) => {
+  try {
+    const { content, reply_to } = req.body;
+    if (!content?.trim()) return res.status(400).json({ error: 'Mensagem vazia' });
+    const result = await pool.query(
+      `INSERT INTO sales_chat_messages (user_id, content, reply_to) VALUES ($1, $2, $3) RETURNING *`,
+      [req.user.id, content.trim(), reply_to || null]
+    );
+    const msg = await pool.query(
+      `SELECT m.*, u.name as user_name, u.role as user_role FROM sales_chat_messages m JOIN users u ON m.user_id = u.id WHERE m.id = $1`,
+      [result.rows[0].id]
+    );
+    res.status(201).json(msg.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao enviar mensagem' });
+  }
+});
+
+// Novas mensagens desde ID (polling)
+app.get('/api/sales/chat/new', authMiddleware, roleMiddleware(...salesAccess), async (req, res) => {
+  try {
+    const { after } = req.query;
+    if (!after) return res.json([]);
+    const result = await pool.query(
+      `SELECT m.*, u.name as user_name, u.role as user_role,
+        rm.content as reply_content, ru.name as reply_user_name
+       FROM sales_chat_messages m
+       JOIN users u ON m.user_id = u.id
+       LEFT JOIN sales_chat_messages rm ON m.reply_to = rm.id
+       LEFT JOIN users ru ON rm.user_id = ru.id
+       WHERE m.id > $1 AND m.deleted = false
+       ORDER BY m.created_at ASC`,
+      [after]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar novas mensagens' });
+  }
+});
+
+// Editar mensagem (autor ou admin)
+app.patch('/api/sales/chat/:id', authMiddleware, roleMiddleware(...salesAccess), async (req, res) => {
+  try {
+    const msg = await pool.query('SELECT * FROM sales_chat_messages WHERE id = $1', [req.params.id]);
+    if (!msg.rows.length) return res.status(404).json({ error: 'Mensagem não encontrada' });
+    if (msg.rows[0].user_id !== req.user.id && !salesAdmin.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Sem permissão' });
+    }
+    const { content } = req.body;
+    const result = await pool.query(
+      `UPDATE sales_chat_messages SET content=$1, edited=true, updated_at=NOW() WHERE id=$2 RETURNING *`,
+      [content, req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao editar' });
+  }
+});
+
+// Deletar mensagem (autor ou admin)
+app.delete('/api/sales/chat/:id', authMiddleware, roleMiddleware(...salesAccess), async (req, res) => {
+  try {
+    const msg = await pool.query('SELECT * FROM sales_chat_messages WHERE id = $1', [req.params.id]);
+    if (!msg.rows.length) return res.status(404).json({ error: 'Mensagem não encontrada' });
+    if (msg.rows[0].user_id !== req.user.id && !salesAdmin.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Sem permissão' });
+    }
+    await pool.query('UPDATE sales_chat_messages SET deleted=true, updated_at=NOW() WHERE id=$1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao deletar' });
+  }
+});
+
+// Fixar/desfixar mensagem (admin)
+app.patch('/api/sales/chat/:id/pin', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const result = await pool.query(
+      'UPDATE sales_chat_messages SET pinned = NOT pinned, updated_at=NOW() WHERE id=$1 RETURNING *',
+      [req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao fixar' });
+  }
+});
+
+// Mensagens fixadas
+app.get('/api/sales/chat/pinned', authMiddleware, roleMiddleware(...salesAccess), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT m.*, u.name as user_name FROM sales_chat_messages m JOIN users u ON m.user_id = u.id
+       WHERE m.pinned = true AND m.deleted = false ORDER BY m.updated_at DESC LIMIT 10`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao listar fixadas' });
+  }
+});
+
+// Contagem de não lidas
+app.get('/api/sales/chat/unread', authMiddleware, roleMiddleware(...salesAccess), async (req, res) => {
+  try {
+    const read = await pool.query('SELECT last_read_at FROM sales_chat_reads WHERE user_id = $1', [req.user.id]);
+    const lastRead = read.rows[0]?.last_read_at || new Date(0);
+    const count = await pool.query(
+      'SELECT COUNT(*)::int as count FROM sales_chat_messages WHERE created_at > $1 AND deleted = false AND user_id != $2',
+      [lastRead, req.user.id]
+    );
+    res.json({ unread: count.rows[0].count });
+  } catch (err) {
+    res.json({ unread: 0 });
+  }
+});
+
+// Marcar como lido
+app.patch('/api/sales/chat/mark-read', authMiddleware, roleMiddleware(...salesAccess), async (req, res) => {
+  try {
+    await pool.query(
+      `INSERT INTO sales_chat_reads (user_id, last_read_at) VALUES ($1, NOW())
+       ON CONFLICT (user_id) DO UPDATE SET last_read_at = NOW()`,
+      [req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro' });
+  }
+});
+
+// ─── Knowledge Base (Banco de Conhecimento) ───
+
+// Listar categorias
+app.get('/api/knowledge/categories', authMiddleware, roleMiddleware(...salesAccess), async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT c.*, COUNT(a.id)::int as article_count
+       FROM knowledge_categories c
+       LEFT JOIN knowledge_articles a ON c.id = a.category_id AND a.published = true
+       GROUP BY c.id ORDER BY c.sort_order`
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao listar categorias' });
+  }
+});
+
+// CRUD categorias (admin)
+app.post('/api/knowledge/categories', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const { name, icon, color } = req.body;
+    const result = await pool.query(
+      'INSERT INTO knowledge_categories (name, icon, color) VALUES ($1, $2, $3) RETURNING *',
+      [name, icon || '', color || '#6c5ce7']
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao criar categoria' });
+  }
+});
+
+app.delete('/api/knowledge/categories/:id', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    await pool.query('DELETE FROM knowledge_categories WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao deletar categoria' });
+  }
+});
+
+// Listar artigos
+app.get('/api/knowledge/articles', authMiddleware, roleMiddleware(...salesAccess), async (req, res) => {
+  try {
+    const { category_id, search, pinned } = req.query;
+    let query = `
+      SELECT a.*, u.name as author_name, c.name as category_name, c.color as category_color
+      FROM knowledge_articles a
+      JOIN users u ON a.author_id = u.id
+      LEFT JOIN knowledge_categories c ON a.category_id = c.id
+      WHERE a.published = true
+    `;
+    const params = [];
+    if (category_id) { params.push(category_id); query += ` AND a.category_id = $${params.length}`; }
+    if (pinned === 'true') query += ' AND a.pinned = true';
+    if (search) { params.push(`%${search}%`); query += ` AND (a.title ILIKE $${params.length} OR a.content ILIKE $${params.length})`; }
+    query += ' ORDER BY a.pinned DESC, a.updated_at DESC';
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao listar artigos' });
+  }
+});
+
+// Obter artigo (incrementa views)
+app.get('/api/knowledge/articles/:id', authMiddleware, roleMiddleware(...salesAccess), async (req, res) => {
+  try {
+    await pool.query('UPDATE knowledge_articles SET views = views + 1 WHERE id = $1', [req.params.id]);
+    const result = await pool.query(
+      `SELECT a.*, u.name as author_name, c.name as category_name, c.color as category_color
+       FROM knowledge_articles a JOIN users u ON a.author_id = u.id
+       LEFT JOIN knowledge_categories c ON a.category_id = c.id WHERE a.id = $1`,
+      [req.params.id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Artigo não encontrado' });
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar artigo' });
+  }
+});
+
+// Criar artigo (admin)
+app.post('/api/knowledge/articles', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const { title, content, category_id, pinned } = req.body;
+    if (!title || !content) return res.status(400).json({ error: 'Título e conteúdo obrigatórios' });
+    const result = await pool.query(
+      `INSERT INTO knowledge_articles (title, content, category_id, author_id, pinned)
+       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+      [title, content, category_id || null, req.user.id, pinned || false]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao criar artigo' });
+  }
+});
+
+// Editar artigo (admin)
+app.put('/api/knowledge/articles/:id', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const { title, content, category_id, pinned, published } = req.body;
+    const result = await pool.query(
+      `UPDATE knowledge_articles SET title=$1, content=$2, category_id=$3, pinned=$4, published=$5, updated_at=NOW()
+       WHERE id=$6 RETURNING *`,
+      [title, content, category_id || null, pinned || false, published !== false, req.params.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao editar artigo' });
+  }
+});
+
+// Deletar artigo (admin)
+app.delete('/api/knowledge/articles/:id', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    await pool.query('DELETE FROM knowledge_articles WHERE id = $1', [req.params.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao deletar artigo' });
+  }
+});
+
+// ─── Kommo CRM Integration ───
+
+// Helper: fazer request na API Kommo
+async function kommoRequest(method, endpoint, body = null) {
+  const cfg = await pool.query('SELECT * FROM kommo_config LIMIT 1');
+  if (!cfg.rows.length || !cfg.rows[0].access_token) throw new Error('Kommo não configurado');
+  const config = cfg.rows[0];
+
+  // Verificar se token expirou e renovar
+  if (config.token_expires_at && new Date(config.token_expires_at) < new Date()) {
+    await refreshKommoToken(config);
+    const updated = await pool.query('SELECT * FROM kommo_config LIMIT 1');
+    Object.assign(config, updated.rows[0]);
+  }
+
+  const url = `https://${config.subdomain}.kommo.com/api/v4${endpoint}`;
+  const options = {
+    method,
+    headers: {
+      'Authorization': `Bearer ${config.access_token}`,
+      'Content-Type': 'application/json',
+    },
+  };
+  if (body) options.body = JSON.stringify(body);
+
+  const res = await fetch(url, options);
+  if (res.status === 429) throw new Error('Rate limit Kommo (7 req/s). Tente novamente.');
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Kommo API ${res.status}: ${txt}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+async function refreshKommoToken(config) {
+  const res = await fetch(`https://${config.subdomain}.kommo.com/oauth2/access_token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: config.client_id,
+      client_secret: config.client_secret,
+      grant_type: 'refresh_token',
+      refresh_token: config.refresh_token,
+      redirect_uri: config.redirect_uri,
+    }),
+  });
+  if (!res.ok) throw new Error('Falha ao renovar token Kommo');
+  const data = await res.json();
+  const expiresAt = new Date(Date.now() + data.expires_in * 1000);
+  await pool.query(
+    `UPDATE kommo_config SET access_token=$1, refresh_token=$2, token_expires_at=$3, updated_at=NOW() WHERE id=$4`,
+    [data.access_token, data.refresh_token, expiresAt, config.id]
+  );
+}
+
+// Salvar/atualizar config Kommo
+app.post('/api/kommo/config', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const { subdomain, client_id, client_secret, redirect_uri } = req.body;
+    if (!subdomain || !client_id || !client_secret) {
+      return res.status(400).json({ error: 'Campos obrigatórios: subdomain, client_id, client_secret' });
+    }
+    const exists = await pool.query('SELECT id FROM kommo_config LIMIT 1');
+    if (exists.rows.length) {
+      await pool.query(
+        `UPDATE kommo_config SET subdomain=$1, client_id=$2, client_secret=$3, redirect_uri=$4, updated_at=NOW() WHERE id=$5`,
+        [subdomain, client_id, client_secret, redirect_uri || `${req.protocol}://${req.get('host')}/api/kommo/callback`, exists.rows[0].id]
+      );
+    } else {
+      await pool.query(
+        `INSERT INTO kommo_config (subdomain, client_id, client_secret, redirect_uri) VALUES ($1, $2, $3, $4)`,
+        [subdomain, client_id, client_secret, redirect_uri || `${req.protocol}://${req.get('host')}/api/kommo/callback`]
+      );
+    }
+    const config = await pool.query('SELECT id, subdomain, client_id, redirect_uri, connected, pipeline_id, pipeline_name, stage_new_lead, stage_responded, stage_interested, stage_won, stage_lost, revenue_field_id, last_sync_at, sync_interval_minutes FROM kommo_config LIMIT 1');
+    res.json(config.rows[0]);
+  } catch (err) {
+    console.error('Kommo config error:', err);
+    res.status(500).json({ error: 'Erro ao salvar config Kommo' });
+  }
+});
+
+// Obter config (sem secrets)
+app.get('/api/kommo/config', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const config = await pool.query('SELECT id, subdomain, client_id, redirect_uri, connected, pipeline_id, pipeline_name, stage_new_lead, stage_responded, stage_interested, stage_won, stage_lost, revenue_field_id, last_sync_at, sync_interval_minutes FROM kommo_config LIMIT 1');
+    res.json(config.rows[0] || null);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao buscar config' });
+  }
+});
+
+// OAuth2 callback - trocar code por tokens
+app.get('/api/kommo/callback', async (req, res) => {
+  try {
+    const { code } = req.query;
+    if (!code) return res.status(400).send('Código de autorização ausente');
+
+    const config = await pool.query('SELECT * FROM kommo_config LIMIT 1');
+    if (!config.rows.length) return res.status(400).send('Kommo não configurado');
+    const cfg = config.rows[0];
+
+    const tokenRes = await fetch(`https://${cfg.subdomain}.kommo.com/oauth2/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_id: cfg.client_id,
+        client_secret: cfg.client_secret,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: cfg.redirect_uri,
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      const err = await tokenRes.text();
+      return res.status(400).send(`Erro ao obter token: ${err}`);
+    }
+
+    const data = await tokenRes.json();
+    const expiresAt = new Date(Date.now() + data.expires_in * 1000);
+
+    await pool.query(
+      `UPDATE kommo_config SET access_token=$1, refresh_token=$2, token_expires_at=$3, connected=true, updated_at=NOW() WHERE id=$4`,
+      [data.access_token, data.refresh_token, expiresAt, cfg.id]
+    );
+
+    // Redirecionar de volta para o painel
+    res.send('<html><body><script>window.close(); window.opener && window.opener.postMessage("kommo_connected","*");</script><p>Kommo conectado! Pode fechar esta janela.</p></body></html>');
+  } catch (err) {
+    console.error('Kommo callback error:', err);
+    res.status(500).send('Erro na autenticação Kommo');
+  }
+});
+
+// Desconectar Kommo
+app.post('/api/kommo/disconnect', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    await pool.query(`UPDATE kommo_config SET access_token=NULL, refresh_token=NULL, token_expires_at=NULL, connected=false, updated_at=NOW()`);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao desconectar' });
+  }
+});
+
+// Listar pipelines do Kommo
+app.get('/api/kommo/pipelines', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const data = await kommoRequest('GET', '/leads/pipelines');
+    const pipelines = (data?._embedded?.pipelines || []).map(p => ({
+      id: p.id,
+      name: p.name,
+      statuses: (p._embedded?.statuses || []).map(s => ({ id: s.id, name: s.name, color: s.color, sort: s.sort }))
+    }));
+    res.json(pipelines);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Salvar mapeamento de pipeline/stages
+app.patch('/api/kommo/pipeline-config', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const { pipeline_id, pipeline_name, stage_new_lead, stage_responded, stage_interested, stage_won, stage_lost, revenue_field_id } = req.body;
+    await pool.query(
+      `UPDATE kommo_config SET pipeline_id=$1, pipeline_name=$2, stage_new_lead=$3, stage_responded=$4, stage_interested=$5, stage_won=$6, stage_lost=$7, revenue_field_id=$8, updated_at=NOW()`,
+      [pipeline_id, pipeline_name, stage_new_lead, stage_responded, stage_interested, stage_won, stage_lost, revenue_field_id || null]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao salvar pipeline config' });
+  }
+});
+
+// Listar users do Kommo
+app.get('/api/kommo/users', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const data = await kommoRequest('GET', '/users');
+    const users = (data?._embedded?.users || []).map(u => ({ id: u.id, name: u.name, email: u.email }));
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Listar mapeamento de users
+app.get('/api/kommo/user-map', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT m.*, s.user_id as seller_user_id, u.name as seller_name
+      FROM kommo_user_map m
+      LEFT JOIN sellers s ON m.seller_id = s.id
+      LEFT JOIN users u ON s.user_id = u.id
+      ORDER BY m.kommo_user_name
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao listar mapeamento' });
+  }
+});
+
+// Salvar mapeamento de um user Kommo → vendedora
+app.patch('/api/kommo/user-map/:kommoUserId', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const { seller_id } = req.body;
+    const kommoUserId = parseInt(req.params.kommoUserId);
+    await pool.query(
+      `INSERT INTO kommo_user_map (kommo_user_id, seller_id) VALUES ($1, $2)
+       ON CONFLICT (kommo_user_id) DO UPDATE SET seller_id=$2`,
+      [kommoUserId, seller_id || null]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao salvar mapeamento' });
+  }
+});
+
+// Auto-mapear users Kommo por email
+app.post('/api/kommo/auto-map', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const kommoUsers = await kommoRequest('GET', '/users');
+    const users = kommoUsers?._embedded?.users || [];
+    let mapped = 0;
+
+    for (const ku of users) {
+      // Salvar/atualizar user na tabela de mapeamento
+      await pool.query(
+        `INSERT INTO kommo_user_map (kommo_user_id, kommo_user_name, kommo_user_email)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (kommo_user_id) DO UPDATE SET kommo_user_name=$2, kommo_user_email=$3`,
+        [ku.id, ku.name, ku.email]
+      );
+
+      // Tentar mapear por email
+      if (ku.email) {
+        const seller = await pool.query(
+          `SELECT s.id FROM sellers s JOIN users u ON s.user_id = u.id WHERE LOWER(u.email) = LOWER($1) AND s.active = true`,
+          [ku.email]
+        );
+        if (seller.rows.length) {
+          await pool.query(
+            `UPDATE kommo_user_map SET seller_id=$1, auto_mapped=true WHERE kommo_user_id=$2`,
+            [seller.rows[0].id, ku.id]
+          );
+          mapped++;
+        }
+      }
+    }
+
+    res.json({ total: users.length, mapped });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Sync manual: puxar leads do Kommo e calcular métricas
+app.post('/api/kommo/sync', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const { date } = req.body;
+    const syncDate = date || new Date().toISOString().split('T')[0];
+
+    // Criar log de sync
+    const logResult = await pool.query(
+      `INSERT INTO kommo_sync_log (sync_type, status) VALUES ('manual', 'running') RETURNING id`
+    );
+    const syncId = logResult.rows[0].id;
+
+    const config = await pool.query('SELECT * FROM kommo_config LIMIT 1');
+    if (!config.rows.length || !config.rows[0].connected) {
+      await pool.query(`UPDATE kommo_sync_log SET status='error', error_message='Kommo não conectado', finished_at=NOW() WHERE id=$1`, [syncId]);
+      return res.status(400).json({ error: 'Kommo não conectado' });
+    }
+    const cfg = config.rows[0];
+
+    if (!cfg.pipeline_id || !cfg.stage_won) {
+      await pool.query(`UPDATE kommo_sync_log SET status='error', error_message='Pipeline/stages não configurados', finished_at=NOW() WHERE id=$1`, [syncId]);
+      return res.status(400).json({ error: 'Pipeline e stages não configurados' });
+    }
+
+    // Buscar mapeamento de users
+    const userMap = await pool.query('SELECT * FROM kommo_user_map WHERE seller_id IS NOT NULL');
+    const map = {};
+    for (const um of userMap.rows) map[um.kommo_user_id] = um.seller_id;
+
+    if (Object.keys(map).length === 0) {
+      await pool.query(`UPDATE kommo_sync_log SET status='error', error_message='Nenhum user mapeado', finished_at=NOW() WHERE id=$1`, [syncId]);
+      return res.status(400).json({ error: 'Nenhum user Kommo mapeado para vendedoras' });
+    }
+
+    // Calcular timestamps do dia
+    const dayStart = new Date(syncDate + 'T00:00:00').getTime() / 1000;
+    const dayEnd = new Date(syncDate + 'T23:59:59').getTime() / 1000;
+
+    // Buscar leads do pipeline, criados ou atualizados no dia
+    let allLeads = [];
+    let page = 1;
+    let hasMore = true;
+
+    while (hasMore) {
+      const data = await kommoRequest('GET',
+        `/leads?filter[pipeline_id]=${cfg.pipeline_id}&filter[updated_at][from]=${dayStart}&filter[updated_at][to]=${dayEnd}&limit=250&page=${page}`
+      );
+      const leads = data?._embedded?.leads || [];
+      allLeads = allLeads.concat(leads);
+      hasMore = leads.length === 250;
+      page++;
+      // Rate limit: esperar um pouco entre pages
+      if (hasMore) await new Promise(r => setTimeout(r, 200));
+    }
+
+    // Cache dos leads
+    for (const lead of allLeads) {
+      const revenue = lead.price || 0;
+      await pool.query(
+        `INSERT INTO kommo_leads_cache (kommo_lead_id, kommo_user_id, pipeline_id, status_id, revenue, lead_created_at, lead_updated_at, synced_at)
+         VALUES ($1, $2, $3, $4, $5, to_timestamp($6), to_timestamp($7), NOW())
+         ON CONFLICT (kommo_lead_id) DO UPDATE SET kommo_user_id=$2, status_id=$4, revenue=$5, lead_updated_at=to_timestamp($7), synced_at=NOW()`,
+        [lead.id, lead.responsible_user_id, lead.pipeline_id, lead.status_id, revenue, lead.created_at, lead.updated_at]
+      );
+    }
+
+    // Calcular métricas por vendedora
+    const metrics = {};
+    for (const lead of allLeads) {
+      const sellerId = map[lead.responsible_user_id];
+      if (!sellerId) continue;
+
+      if (!metrics[sellerId]) metrics[sellerId] = { leads_received: 0, leads_responded: 0, conversions: 0, sales_closed: 0, revenue: 0 };
+      const m = metrics[sellerId];
+
+      // Lead recebido: qualquer lead no pipeline
+      m.leads_received++;
+
+      // Respondido: saiu do stage inicial
+      if (lead.status_id !== cfg.stage_new_lead) m.leads_responded++;
+
+      // Conversão: chegou no stage de interesse
+      if (cfg.stage_interested && lead.status_id === cfg.stage_interested) m.conversions++;
+
+      // Também conta como conversão se já passou para won
+      if (lead.status_id === cfg.stage_won) {
+        m.conversions++;
+        m.sales_closed++;
+        m.revenue += parseFloat(lead.price || 0);
+      }
+    }
+
+    // Salvar como relatórios do tipo 'completo' para o dia
+    let reportsCreated = 0;
+    for (const [sellerId, m] of Object.entries(metrics)) {
+      await pool.query(
+        `INSERT INTO sales_reports (seller_id, report_date, report_type, leads_received, leads_responded, conversions, sales_closed, revenue, notes)
+         VALUES ($1, $2, 'completo', $3, $4, $5, $6, $7, 'Sync automático Kommo')
+         ON CONFLICT (seller_id, report_date, report_type)
+         DO UPDATE SET leads_received=$3, leads_responded=$4, conversions=$5, sales_closed=$6, revenue=$7, notes='Sync automático Kommo', updated_at=NOW()`,
+        [parseInt(sellerId), syncDate, m.leads_received, m.leads_responded, m.conversions, m.sales_closed, m.revenue]
+      );
+      reportsCreated++;
+    }
+
+    // Atualizar log e config
+    await pool.query(`UPDATE kommo_sync_log SET status='success', leads_processed=$1, reports_created=$2, finished_at=NOW() WHERE id=$3`, [allLeads.length, reportsCreated, syncId]);
+    await pool.query(`UPDATE kommo_config SET last_sync_at=NOW()`);
+
+    res.json({ leads_processed: allLeads.length, reports_created: reportsCreated, date: syncDate });
+  } catch (err) {
+    console.error('Kommo sync error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Listar logs de sync
+app.get('/api/kommo/sync-logs', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM kommo_sync_log ORDER BY started_at DESC LIMIT 20');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: 'Erro ao listar logs' });
+  }
+});
+
+// Webhook endpoint (Kommo envia updates aqui)
+// URL: https://demandas.sortehub.online/api/kommo/webhook
+app.post('/api/kommo/webhook', async (req, res) => {
+  res.sendStatus(200); // Sempre responder 200 imediatamente para Kommo
+
+  try {
+    const body = req.body;
+    console.log('[Kommo Webhook] Body recebido:', JSON.stringify(body).substring(0, 500));
+
+    const eventType = body?.leads?.add ? 'lead_add'
+      : body?.['leads[add]'] ? 'lead_add'
+      : body?.['leads[status]'] ? 'lead_status'
+      : body?.['leads[update]'] ? 'lead_update'
+      : body?.leads?.status ? 'lead_status'
+      : body?.leads?.update ? 'lead_update'
+      : body?.contacts?.add ? 'contact_add'
+      : body?.contacts?.update ? 'contact_update'
+      : 'unknown';
+
+    // Log do evento
+    await pool.query(
+      `INSERT INTO kommo_webhook_events (event_type, payload, processed) VALUES ($1, $2, false)`,
+      [eventType, JSON.stringify(body)]
+    );
+
+    // Processar leads (add, update, status)
+    const leads = body?.leads?.add || body?.leads?.update || body?.leads?.status || [];
+    if (!leads.length) return;
+
+    // Buscar config do pipeline (pode não existir ainda)
+    const configRes = await pool.query('SELECT * FROM kommo_config LIMIT 1');
+    const cfg = configRes.rows[0] || null;
+
+    // Buscar mapeamento de users
+    const userMapRes = await pool.query('SELECT kommo_user_id, seller_id FROM kommo_user_map WHERE seller_id IS NOT NULL');
+    const sellerMap = {};
+    for (const um of userMapRes.rows) sellerMap[um.kommo_user_id] = um.seller_id;
+
+    const today = new Date().toISOString().split('T')[0];
+    const affectedSellers = new Set();
+
+    for (const lead of leads) {
+      const leadId = parseInt(lead.id);
+      const statusId = parseInt(lead.status_id);
+      const responsibleId = parseInt(lead.responsible_user_id);
+      const price = parseFloat(lead.price || 0);
+      const pipelineId = parseInt(lead.pipeline_id || cfg?.pipeline_id || 0);
+
+      // Atualizar cache do lead (sempre, mesmo sem config)
+      await pool.query(
+        `INSERT INTO kommo_leads_cache (kommo_lead_id, kommo_user_id, pipeline_id, status_id, revenue, lead_created_at, lead_updated_at, synced_at)
+         VALUES ($1, $2, $3, $4, $5, to_timestamp($6), to_timestamp($7), NOW())
+         ON CONFLICT (kommo_lead_id) DO UPDATE SET kommo_user_id=$2, pipeline_id=$3, status_id=$4, revenue=$5, lead_updated_at=to_timestamp($7), synced_at=NOW()`,
+        [leadId, responsibleId, pipelineId, statusId, price, lead.created_at || 0, lead.updated_at || 0]
+      );
+
+      // Marcar vendedora afetada para recalcular
+      const sellerId = sellerMap[responsibleId];
+      if (sellerId) affectedSellers.add(sellerId);
+    }
+
+    console.log(`[Kommo Webhook] ${leads.length} leads cacheados (${eventType})`);
+
+
+    // Recalcular métricas do dia para cada vendedora afetada
+    if (affectedSellers.size > 0 && cfg?.pipeline_id) {
+      for (const sellerId of affectedSellers) {
+        // Buscar kommo_user_ids mapeados para esta vendedora
+        const kumRes = await pool.query('SELECT kommo_user_id FROM kommo_user_map WHERE seller_id = $1', [sellerId]);
+        const kommoUserIds = kumRes.rows.map(r => r.kommo_user_id);
+        if (!kommoUserIds.length) continue;
+
+        // Contar métricas dos leads de hoje nesse pipeline para essa vendedora
+        const metricsRes = await pool.query(
+          `SELECT
+            COUNT(*) AS leads_received,
+            COUNT(*) FILTER (WHERE status_id != $1) AS leads_responded,
+            COUNT(*) FILTER (WHERE status_id = $2 OR status_id = $3) AS conversions,
+            COUNT(*) FILTER (WHERE status_id = $3) AS sales_closed,
+            COALESCE(SUM(revenue) FILTER (WHERE status_id = $3), 0) AS revenue
+           FROM kommo_leads_cache
+           WHERE kommo_user_id = ANY($4)
+             AND pipeline_id = $5
+             AND lead_updated_at >= $6::date
+             AND lead_updated_at < ($6::date + interval '1 day')`,
+          [
+            cfg.stage_new_lead || 0,
+            cfg.stage_interested || 0,
+            cfg.stage_won || 0,
+            kommoUserIds,
+            cfg.pipeline_id,
+            today
+          ]
+        );
+
+        const m = metricsRes.rows[0];
+
+        // Upsert relatório diário
+        await pool.query(
+          `INSERT INTO sales_reports (seller_id, report_date, report_type, leads_received, leads_responded, conversions, sales_closed, revenue, notes)
+           VALUES ($1, $2, 'completo', $3, $4, $5, $6, $7, 'Webhook Kommo (tempo real)')
+           ON CONFLICT (seller_id, report_date, report_type)
+           DO UPDATE SET leads_received=$3, leads_responded=$4, conversions=$5, sales_closed=$6, revenue=$7, notes='Webhook Kommo (tempo real)', updated_at=NOW()`,
+          [sellerId, today, parseInt(m.leads_received), parseInt(m.leads_responded), parseInt(m.conversions), parseInt(m.sales_closed), parseFloat(m.revenue)]
+        );
+      }
+
+      await pool.query(`UPDATE kommo_config SET last_sync_at=NOW()`);
+      console.log(`[Kommo Webhook] ${leads.length} leads processados, ${affectedSellers.size} vendedoras atualizadas`);
+    }
+
+    // Marcar evento como processado
+    await pool.query(
+      `UPDATE kommo_webhook_events SET processed=true, processed_at=NOW()
+       WHERE id = (SELECT id FROM kommo_webhook_events ORDER BY id DESC LIMIT 1)`
+    );
+  } catch (err) {
+    console.error('[Kommo Webhook Error]', err);
+  }
+});
+
+// Métricas do webhook (para Sara acompanhar saúde da integração)
+app.get('/api/kommo/webhook-stats', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const stats = await pool.query(`
+      SELECT
+        COUNT(*) AS total_events,
+        COUNT(*) FILTER (WHERE processed = true) AS processed,
+        COUNT(*) FILTER (WHERE processed = false) AS pending,
+        COUNT(*) FILTER (WHERE created_at > NOW() - interval '1 hour') AS last_hour,
+        COUNT(*) FILTER (WHERE created_at > NOW() - interval '24 hours') AS last_24h,
+        MAX(created_at) AS last_event_at
+      FROM kommo_webhook_events
+    `);
+
+    const byType = await pool.query(`
+      SELECT event_type, COUNT(*) AS count,
+        MAX(created_at) AS last_at
+      FROM kommo_webhook_events
+      WHERE created_at > NOW() - interval '24 hours'
+      GROUP BY event_type
+      ORDER BY count DESC
+    `);
+
+    const recentErrors = await pool.query(`
+      SELECT id, event_type, error_message, created_at
+      FROM kommo_webhook_events
+      WHERE error_message IS NOT NULL
+      ORDER BY created_at DESC
+      LIMIT 10
+    `);
+
+    res.json({
+      ...stats.rows[0],
+      by_type: byType.rows,
+      recent_errors: recentErrors.rows,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Listar últimos eventos do webhook
+app.get('/api/kommo/webhook-events', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const result = await pool.query(
+      `SELECT id, event_type, processed, processed_at, error_message, created_at
+       FROM kommo_webhook_events
+       ORDER BY created_at DESC
+       LIMIT $1`,
+      [limit]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Custom fields do Kommo (para encontrar campo de revenue)
+app.get('/api/kommo/custom-fields', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const data = await kommoRequest('GET', '/leads/custom_fields');
+    const fields = (data?._embedded?.custom_fields || []).map(f => ({ id: f.id, name: f.name, type: f.type }));
+    res.json(fields);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Sync periódico (roda a cada X minutos via setInterval) ───
+let syncInterval = null;
+
+async function runPeriodicSync() {
+  try {
+    const config = await pool.query('SELECT * FROM kommo_config WHERE connected = true LIMIT 1');
+    if (!config.rows.length) return;
+    const cfg = config.rows[0];
+    if (!cfg.pipeline_id || !cfg.stage_won) return;
+
+    const userMap = await pool.query('SELECT * FROM kommo_user_map WHERE seller_id IS NOT NULL');
+    if (!userMap.rows.length) return;
+    const map = {};
+    for (const um of userMap.rows) map[um.kommo_user_id] = um.seller_id;
+
+    const today = new Date().toISOString().split('T')[0];
+    const dayStart = new Date(today + 'T00:00:00').getTime() / 1000;
+    const dayEnd = new Date(today + 'T23:59:59').getTime() / 1000;
+
+    let allLeads = [];
+    const data = await kommoRequest('GET', `/leads?filter[pipeline_id]=${cfg.pipeline_id}&filter[updated_at][from]=${dayStart}&filter[updated_at][to]=${dayEnd}&limit=250`);
+    allLeads = data?._embedded?.leads || [];
+
+    const metrics = {};
+    for (const lead of allLeads) {
+      const sellerId = map[lead.responsible_user_id];
+      if (!sellerId) continue;
+      if (!metrics[sellerId]) metrics[sellerId] = { leads_received: 0, leads_responded: 0, conversions: 0, sales_closed: 0, revenue: 0 };
+      const m = metrics[sellerId];
+      m.leads_received++;
+      if (lead.status_id !== cfg.stage_new_lead) m.leads_responded++;
+      if (cfg.stage_interested && lead.status_id === cfg.stage_interested) m.conversions++;
+      if (lead.status_id === cfg.stage_won) { m.conversions++; m.sales_closed++; m.revenue += parseFloat(lead.price || 0); }
+    }
+
+    for (const [sellerId, m] of Object.entries(metrics)) {
+      await pool.query(
+        `INSERT INTO sales_reports (seller_id, report_date, report_type, leads_received, leads_responded, conversions, sales_closed, revenue, notes)
+         VALUES ($1, $2, 'completo', $3, $4, $5, $6, $7, 'Auto-sync Kommo')
+         ON CONFLICT (seller_id, report_date, report_type)
+         DO UPDATE SET leads_received=$3, leads_responded=$4, conversions=$5, sales_closed=$6, revenue=$7, notes='Auto-sync Kommo', updated_at=NOW()`,
+        [parseInt(sellerId), today, m.leads_received, m.leads_responded, m.conversions, m.sales_closed, m.revenue]
+      );
+    }
+
+    await pool.query(`UPDATE kommo_config SET last_sync_at=NOW()`);
+    console.log(`[Kommo Sync] ${allLeads.length} leads processados, ${Object.keys(metrics).length} vendedoras atualizadas`);
+  } catch (err) {
+    console.error('[Kommo Sync Error]', err.message);
+  }
+}
+
+// Iniciar sync periódico
+async function startPeriodicSync() {
+  try {
+    const config = await pool.query('SELECT sync_interval_minutes, connected FROM kommo_config LIMIT 1');
+    if (config.rows.length && config.rows[0].connected) {
+      const interval = (config.rows[0].sync_interval_minutes || 15) * 60 * 1000;
+      if (syncInterval) clearInterval(syncInterval);
+      syncInterval = setInterval(runPeriodicSync, interval);
+      console.log(`[Kommo] Sync periódico ativado a cada ${config.rows[0].sync_interval_minutes || 15} minutos`);
+    }
+  } catch {}
+}
+
 // ─── Serve static in production ───
 app.use(express.static('dist'));
 app.get('*', (req, res) => {
@@ -1387,4 +2704,7 @@ app.get('*', (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  startPeriodicSync();
+});

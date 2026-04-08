@@ -35,7 +35,25 @@
       "Bash(grep:*)",
       "Bash(docker exec demandas_app:*)",
       "Bash(docker cp:*)",
-      "Bash(docker exec demandas_db:*)"
+      "Bash(docker exec demandas_db:*)",
+      "Read(//c/Users/programador-fb/Desktop/Projetos/03_Web_Sistemas/organizador-demandas/$\\(pwd\\)/**)",
+      "Bash(find:*)",
+      "WebFetch(domain:drive.google.com)",
+      "WebSearch",
+      "WebFetch(domain:developers.kommo.com)",
+      "Bash(export PATH=\"/c/Program Files/nodejs:$PATH\")",
+      "Bash(where ngrok:*)",
+      "Bash(PGPASSWORD=1234 psql -U postgres -d organizador_demandas -f migrations/009_kommo_webhook_events.sql)",
+      "Bash(PGPASSWORD=1234 psql:*)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(tasklist)",
+      "Bash(taskkill //F //IM ngrok.exe)",
+      "Bash(PORT=3010 node server.js)",
+      "Bash(docker network:*)",
+      "Bash(sc query:*)",
+      "Bash(where cloudflared:*)",
+      "Bash(docker restart:*)",
+      "Bash(docker exec:*)"
     ]
   }
 }

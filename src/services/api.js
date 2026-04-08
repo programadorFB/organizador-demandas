@@ -1,3 +1,5 @@
+import { isDemoMode, mockSales, mockSalesChat, mockKnowledge, mockKommo } from '../mocks/salesMock';
+
 const API = '/api';
 
 function headers() {
@@ -175,3 +177,84 @@ export const design = {
   getPreferences: () => request('/design/preferences'),
   savePreferences: (prefs) => request('/design/preferences', { method: 'PATCH', body: JSON.stringify(prefs) }),
 };
+
+// Sales Panel
+const _salesReal = {
+  sellers: () => request('/sales/sellers'),
+  createSeller: (body) => request('/sales/sellers', { method: 'POST', body: JSON.stringify(body) }),
+  toggleSeller: (id) => request(`/sales/sellers/${id}/toggle-active`, { method: 'PATCH' }),
+  removeSeller: (id) => request(`/sales/sellers/${id}`, { method: 'DELETE' }),
+  updateGoals: (id, body) => request(`/sales/sellers/${id}/goals`, { method: 'PATCH', body: JSON.stringify(body) }),
+  stats: (params = {}) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+    return request(`/sales/stats${qs ? `?${qs}` : ''}`);
+  },
+  monthlySummary: (params = {}) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+    return request(`/sales/monthly-summary${qs ? `?${qs}` : ''}`);
+  },
+  submitReport: (body) => request('/sales/reports', { method: 'POST', body: JSON.stringify(body) }),
+  dashboard: () => request('/sales/seller/dashboard'),
+  myReports: (limit) => request(`/sales/my-reports${limit ? `?limit=${limit}` : ''}`),
+  sellerReports: (sellerId, params = {}) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+    return request(`/sales/sellers/${sellerId}/reports${qs ? `?${qs}` : ''}`);
+  },
+};
+
+const _salesChatReal = {
+  messages: (before) => request(`/sales/chat${before ? `?before=${before}` : ''}`),
+  send: (content, reply_to) => request('/sales/chat', { method: 'POST', body: JSON.stringify({ content, reply_to }) }),
+  newMessages: (after) => request(`/sales/chat/new?after=${after}`),
+  edit: (id, content) => request(`/sales/chat/${id}`, { method: 'PATCH', body: JSON.stringify({ content }) }),
+  remove: (id) => request(`/sales/chat/${id}`, { method: 'DELETE' }),
+  pin: (id) => request(`/sales/chat/${id}/pin`, { method: 'PATCH' }),
+  pinned: () => request('/sales/chat/pinned'),
+  unread: () => request('/sales/chat/unread'),
+  markRead: () => request('/sales/chat/mark-read', { method: 'PATCH' }),
+};
+
+const _knowledgeReal = {
+  categories: () => request('/knowledge/categories'),
+  createCategory: (body) => request('/knowledge/categories', { method: 'POST', body: JSON.stringify(body) }),
+  deleteCategory: (id) => request(`/knowledge/categories/${id}`, { method: 'DELETE' }),
+  articles: (params = {}) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+    return request(`/knowledge/articles${qs ? `?${qs}` : ''}`);
+  },
+  article: (id) => request(`/knowledge/articles/${id}`),
+  createArticle: (body) => request('/knowledge/articles', { method: 'POST', body: JSON.stringify(body) }),
+  updateArticle: (id, body) => request(`/knowledge/articles/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteArticle: (id) => request(`/knowledge/articles/${id}`, { method: 'DELETE' }),
+};
+
+const _kommoReal = {
+  getConfig: () => request('/kommo/config'),
+  saveConfig: (body) => request('/kommo/config', { method: 'POST', body: JSON.stringify(body) }),
+  disconnect: () => request('/kommo/disconnect', { method: 'POST' }),
+  getPipelines: () => request('/kommo/pipelines'),
+  savePipelineConfig: (body) => request('/kommo/pipeline-config', { method: 'PATCH', body: JSON.stringify(body) }),
+  getKommoUsers: () => request('/kommo/users'),
+  getUserMap: () => request('/kommo/user-map'),
+  mapUser: (kommoUserId, sellerId) => request(`/kommo/user-map/${kommoUserId}`, { method: 'PATCH', body: JSON.stringify({ seller_id: sellerId }) }),
+  autoMap: () => request('/kommo/auto-map', { method: 'POST' }),
+  sync: (date) => request('/kommo/sync', { method: 'POST', body: JSON.stringify({ date }) }),
+  getSyncLogs: () => request('/kommo/sync-logs'),
+  getCustomFields: () => request('/kommo/custom-fields'),
+  getWebhookStats: () => request('/kommo/webhook-stats'),
+  getWebhookEvents: (limit = 50) => request(`/kommo/webhook-events?limit=${limit}`),
+};
+
+// Proxy: usa mock se demo_mode ativo, senao usa real
+function demoProxy(real, mock) {
+  return new Proxy({}, {
+    get(_, prop) {
+      return (...args) => isDemoMode() ? mock[prop](...args) : real[prop](...args);
+    }
+  });
+}
+
+export const sales = demoProxy(_salesReal, mockSales);
+export const kommo = demoProxy(_kommoReal, mockKommo);
+export const salesChat = demoProxy(_salesChatReal, mockSalesChat);
+export const knowledge = demoProxy(_knowledgeReal, mockKnowledge);

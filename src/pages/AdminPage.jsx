@@ -113,6 +113,10 @@ export default function AdminPage() {
                       <option value="user">User</option>
                       <option value="supervisor">Supervisor</option>
                       <option value="admin">Admin</option>
+                      <option value="designer">Designer</option>
+                      <option value="design_admin">Design Admin</option>
+                      <option value="sales_admin">Sales Admin</option>
+                      <option value="vendedora">Vendedora</option>
                     </select>
                   </span>
                   <span className={u.active ? styles.active : styles.inactive}>

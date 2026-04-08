@@ -36,6 +36,14 @@ services:
       db:
         condition: service_healthy
 
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: demandas_tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token eyJhIjoiOGQ2YTZmYWY4YzMwM2EzNDU2YzNlZDUwMGYzNjBlNDciLCJ0IjoiMDcxYjE2ZTgtZmQ3ZS00N2JhLWE2NTgtYTkyNTY5M2MxNmIyIiwicyI6Ik1EVXhaVEJtTkRjdE9UZzBOQzAwTTJFNUxXSm1Nekl0Wm1aak9XTTRaR0psTjJSaSJ9
+    depends_on:
+      - app
+
 volumes:
   pg_data:
   uploads_data:

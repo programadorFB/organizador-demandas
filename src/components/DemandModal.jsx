@@ -28,6 +28,7 @@ export default function DemandModal({ demand, onClose, onUpdate }) {
   const [urgentNote, setUrgentNote] = useState('');
   const [attachList, setAttachList] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
 
   const loadAttachments = () => attachApi.list(demand.id).then(setAttachList).catch(() => {});
 
@@ -82,11 +83,13 @@ export default function DemandModal({ demand, onClose, onUpdate }) {
     const files = Array.from(e.target.files);
     if (!files.length) return;
     setUploading(true);
+    setUploadError('');
     try {
       await attachApi.upload(demand.id, files);
       await loadAttachments();
     } catch (err) {
       console.error('Upload error:', err);
+      setUploadError(err.message || 'Erro ao enviar arquivo');
     } finally {
       setUploading(false);
       e.target.value = '';
@@ -275,9 +278,10 @@ export default function DemandModal({ demand, onClose, onUpdate }) {
               </div>
             )}
             {attachList.length === 0 && <p className={styles.noComments}>Nenhum anexo.</p>}
+            {uploadError && <p style={{ color: 'var(--priority-urgente)', fontSize: '0.82rem', marginTop: '0.4rem' }}>{uploadError}</p>}
             <div className={styles.attachUpload}>
               <label className={styles.uploadLabel}>
-                <input type="file" multiple onChange={handleUploadFiles} style={{ display: 'none' }} />
+                <input type="file" multiple onChange={handleUploadFiles} style={{ display: 'none' }} disabled={uploading} />
                 <span className="btn btn-ghost btn-sm">{uploading ? 'Enviando...' : '+ Adicionar Anexo'}</span>
               </label>
             </div>

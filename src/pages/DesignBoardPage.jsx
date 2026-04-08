@@ -4,6 +4,7 @@ import { design as designApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import DesignCardModal from '../components/DesignCardModal';
 import BgEffects from '../components/BgEffects';
+import ThemeSettings from '../components/ThemeSettings';
 import styles from '../styles/DesignBoard.module.css';
 
 const ALL_COLUMNS = [
@@ -42,6 +43,7 @@ export default function DesignBoardPage() {
   const [showBgInput, setShowBgInput] = useState(false);
   const [bgEffect, setBgEffect] = useState('none');
   const [showStylePanel, setShowStylePanel] = useState(false);
+  const [showThemePanel, setShowThemePanel] = useState(false);
   const [dragCardStatus, setDragCardStatus] = useState(null);
   const [showManageDesigners, setShowManageDesigners] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
@@ -307,6 +309,7 @@ export default function DesignBoardPage() {
           )}
           <button className={styles.bgBtn} onClick={() => setShowBgInput(!showBgInput)} title="Plano de fundo">🖼</button>
           <button className={styles.bgBtn} onClick={() => setShowStylePanel(!showStylePanel)} title="Efeitos visuais">✨</button>
+          <button className={styles.bgBtn} onClick={() => setShowThemePanel(!showThemePanel)} title="Esquema de cores">🎨</button>
           <button className={styles.avatarBtn} onClick={() => setShowProfile(!showProfile)}>
             {myAvatar ? <img src={`/uploads/${myAvatar}`} alt="" className={styles.avatarImg} /> : <span className={styles.avatarInitials}>{user?.name?.slice(0, 2).toUpperCase()}</span>}
           </button>
@@ -344,6 +347,21 @@ export default function DesignBoardPage() {
               <span>{opt.icon}</span> {opt.label}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Theme Panel */}
+      {showThemePanel && (
+        <div style={{
+          position: 'fixed', top: '60px', right: '1rem', width: '380px', maxHeight: '80vh', overflowY: 'auto',
+          background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius)',
+          padding: '1.2rem', boxShadow: 'var(--shadow-lg)', zIndex: 999,
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700 }}>Esquema de Cores</h3>
+            <button onClick={() => setShowThemePanel(false)} style={{ background: 'transparent', color: 'var(--text-muted)', fontSize: '1.1rem' }}>&times;</button>
+          </div>
+          <ThemeSettings />
         </div>
       )}
 
