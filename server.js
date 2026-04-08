@@ -2451,13 +2451,16 @@ app.post('/api/kommo/webhook', async (req, res) => {
     console.log('[Kommo Webhook] Body recebido:', JSON.stringify(body).substring(0, 500));
 
     const eventType = body?.leads?.add ? 'lead_add'
-      : body?.['leads[add]'] ? 'lead_add'
-      : body?.['leads[status]'] ? 'lead_status'
-      : body?.['leads[update]'] ? 'lead_update'
       : body?.leads?.status ? 'lead_status'
       : body?.leads?.update ? 'lead_update'
+      : body?.leads?.responsible ? 'lead_responsible'
       : body?.contacts?.add ? 'contact_add'
       : body?.contacts?.update ? 'contact_update'
+      : body?.unsorted?.add ? 'unsorted_add'
+      : body?.unsorted?.update ? 'unsorted_update'
+      : body?.unsorted?.delete ? 'unsorted_accept'
+      : body?.talk?.update ? 'talk_update'
+      : body?.message?.add ? 'message_add'
       : 'unknown';
 
     // Log do evento
@@ -2466,8 +2469,8 @@ app.post('/api/kommo/webhook', async (req, res) => {
       [eventType, JSON.stringify(body)]
     );
 
-    // Processar leads (add, update, status)
-    const leads = body?.leads?.add || body?.leads?.update || body?.leads?.status || [];
+    // Processar leads (add, update, status, responsible)
+    const leads = body?.leads?.add || body?.leads?.update || body?.leads?.status || body?.leads?.responsible || [];
     if (!leads.length) return;
 
     // Buscar config do pipeline (pode não existir ainda)
