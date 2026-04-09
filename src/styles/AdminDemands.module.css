@@ -1,0 +1,211 @@
+.container {
+  min-height: 100vh;
+  background: var(--bg-primary);
+}
+
+.topBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.topBarLeft {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.backBtn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 0.35rem 0.75rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.15s;
+}
+
+.backBtn:hover {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.pageTitle {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.statsRow {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.statBadge {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 20px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+
+.filters select {
+  width: auto;
+  padding: 0.4rem 2rem 0.4rem 0.7rem;
+  font-size: 0.8rem;
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.tableWrapper {
+  overflow-x: auto;
+  padding: 0;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.table th {
+  text-align: left;
+  padding: 0.7rem 1rem;
+  font-weight: 600;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.table td {
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.table tr:hover td {
+  background: var(--bg-card);
+}
+
+.demandTitle {
+  font-weight: 600;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.priorityBadge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.priorityBaixa { background: rgba(46, 213, 115, 0.15); color: #2ed573; }
+.priorityMedia { background: rgba(255, 193, 7, 0.15); color: #ffc107; }
+.priorityAlta { background: rgba(255, 107, 53, 0.15); color: #ff6b35; }
+.priorityUrgente { background: rgba(255, 71, 87, 0.2); color: #ff4757; }
+
+.statusBadge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 10px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.statusBacklog { background: rgba(108, 92, 231, 0.15); color: #6c5ce7; }
+.statusSprintBacklog { background: rgba(9, 132, 227, 0.15); color: #0984e3; }
+.statusEmProgresso { background: rgba(253, 203, 110, 0.2); color: #e17f10; }
+.statusEmRevisao { background: rgba(162, 155, 254, 0.15); color: #a29bfe; }
+.statusConcluido { background: rgba(0, 184, 148, 0.15); color: #00b894; }
+.statusCancelado { background: rgba(150, 150, 150, 0.15); color: #999; }
+
+.categoryTag {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+.redirectSelect {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.redirectSelect:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.dateCell {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4rem;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+
+.empty {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 768px) {
+  .filters {
+    flex-wrap: wrap;
+  }
+  .topBar {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+  }
+  .table {
+    font-size: 0.75rem;
+  }
+  .table th, .table td {
+    padding: 0.5rem 0.6rem;
+  }
+}

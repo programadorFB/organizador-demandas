@@ -305,6 +305,7 @@ export default function DesignBoardPage() {
               </button>
               <button className={styles.btnGold} onClick={() => navigate('/design/analytics')}>📊 Analytics</button>
               <button className={styles.btnGhost} onClick={() => setShowManageDesigners(!showManageDesigners)}>👥 Designers</button>
+              <button className={styles.btnGold} onClick={() => navigate('/admin-demandas')}>📋 Central Demandas</button>
             </>
           )}
           <button className={styles.bgBtn} onClick={() => setShowBgInput(!showBgInput)} title="Plano de fundo">🖼</button>

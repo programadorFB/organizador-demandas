@@ -142,6 +142,22 @@ function KommoConfig({ sellers }) {
 
   const fmtDt = (d) => d ? new Date(d).toLocaleString('pt-BR') : '--';
 
+  const WEBHOOK_LABELS = {
+    lead_add:         { label: 'Novo Lead',             desc: 'Um novo lead entrou no pipeline (via formulario, WhatsApp, etc)', color: '#00b894' },
+    lead_status:      { label: 'Lead Mudou Etapa',      desc: 'Vendedora moveu o lead para outra etapa do funil', color: '#6c5ce7' },
+    lead_update:      { label: 'Lead Atualizado',       desc: 'Dados do lead foram editados (nome, valor, campo custom)', color: '#0984e3' },
+    lead_responsible: { label: 'Responsavel Alterado',  desc: 'Lead foi transferido para outra vendedora', color: '#fdcb6e' },
+    contact_add:      { label: 'Novo Contato',          desc: 'Um contato foi criado no CRM (cliente novo)', color: '#00cec9' },
+    contact_update:   { label: 'Contato Atualizado',    desc: 'Dados de um contato foram editados (telefone, email, etc)', color: '#74b9ff' },
+    unsorted_add:     { label: 'Lead no Inbox',         desc: 'Mensagem recebida gerou lead no inbox (aguardando aceite)', color: '#e17055' },
+    unsorted_update:  { label: 'Inbox Atualizado',      desc: 'Conversa no inbox recebeu nova mensagem', color: '#fab1a0' },
+    unsorted_accept:  { label: 'Lead Aceito do Inbox',  desc: 'Vendedora aceitou o lead do inbox e vinculou ao pipeline', color: '#55efc4' },
+    talk_update:      { label: 'Conversa Atualizada',   desc: 'Nova atividade em conversa (WhatsApp, chat, etc)', color: '#a29bfe' },
+    message_add:      { label: 'Nova Mensagem',         desc: 'Mensagem enviada ou recebida no chat do lead', color: '#dfe6e9' },
+    unknown:          { label: 'Outro',                 desc: 'Evento nao mapeado da Kommo', color: 'var(--text-muted)' },
+  };
+  const getWebhookLabel = (type) => WEBHOOK_LABELS[type] || WEBHOOK_LABELS.unknown;
+
   if (loading) return <div className={styles.configSection}><p>Carregando...</p></div>;
 
   return (
@@ -389,15 +405,19 @@ function KommoConfig({ sellers }) {
             <div style={{ marginBottom: '1.2rem' }}>
               <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>Eventos por Tipo (24h)</h4>
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                {webhookStats.by_type.map((t, i) => (
-                  <span key={i} style={{
-                    background: 'var(--bg-primary)', border: '1px solid var(--border)',
-                    borderRadius: '20px', padding: '0.3rem 0.8rem', fontSize: '0.78rem',
-                    color: 'var(--text-secondary)',
-                  }}>
-                    {t.event_type.replace('_', ' ')}: <strong style={{ color: 'var(--accent-purple)' }}>{t.count}</strong>
-                  </span>
-                ))}
+                {webhookStats.by_type.map((t, i) => {
+                  const wl = getWebhookLabel(t.event_type);
+                  return (
+                    <span key={i} title={wl.desc} style={{
+                      background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                      borderRadius: '20px', padding: '0.3rem 0.8rem', fontSize: '0.78rem',
+                      color: 'var(--text-secondary)', cursor: 'help',
+                    }}>
+                      <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', background: wl.color, marginRight: '0.4rem', verticalAlign: 'middle' }} />
+                      {wl.label}: <strong style={{ color: wl.color }}>{t.count}</strong>
+                    </span>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -421,17 +441,24 @@ function KommoConfig({ sellers }) {
             <>
               <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem' }}>Ultimos Eventos</h4>
               <div className={styles.sellersManageTable}>
-                <div className={styles.mHead} style={{ gridTemplateColumns: '0.5fr 1fr 0.8fr 1.2fr' }}>
-                  <span>ID</span><span>Tipo</span><span>Status</span><span>Data</span>
+                <div className={styles.mHead} style={{ gridTemplateColumns: '0.4fr 1.2fr 2fr 0.6fr 1.2fr' }}>
+                  <span>ID</span><span>Acao</span><span>O que aconteceu</span><span>Status</span><span>Data</span>
                 </div>
-                {webhookEvents.map(ev => (
-                  <div key={ev.id} className={styles.mRow} style={{ gridTemplateColumns: '0.5fr 1fr 0.8fr 1.2fr' }}>
-                    <span>#{ev.id}</span>
-                    <span>{ev.event_type.replace('_', ' ')}</span>
-                    <span className={ev.processed ? styles.statusOn : styles.statusOff}>{ev.processed ? 'OK' : 'Pendente'}</span>
-                    <span className={styles.mEmail}>{fmtDt(ev.created_at)}</span>
-                  </div>
-                ))}
+                {webhookEvents.map(ev => {
+                  const wl = getWebhookLabel(ev.event_type);
+                  return (
+                    <div key={ev.id} className={styles.mRow} style={{ gridTemplateColumns: '0.4fr 1.2fr 2fr 0.6fr 1.2fr' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>#{ev.id}</span>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: wl.color, flexShrink: 0 }} />
+                        <strong style={{ color: wl.color, fontSize: '0.78rem' }}>{wl.label}</strong>
+                      </span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{wl.desc}</span>
+                      <span className={ev.processed ? styles.statusOn : styles.statusOff}>{ev.processed ? 'OK' : 'Pendente'}</span>
+                      <span className={styles.mEmail}>{fmtDt(ev.created_at)}</span>
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}
@@ -599,6 +626,9 @@ export default function SalesDashboardPage() {
           </button>
           <button className={`${styles.sideNavBtn} ${page === 'aparencia' ? styles.sideNavActive : ''}`} onClick={() => setPage('aparencia')}>
             <span className={styles.navIcon}>&#9790;</span> Aparencia
+          </button>
+          <button className={styles.sideNavBtn} onClick={() => navigate('/admin-demandas')}>
+            <span className={styles.navIcon}>&#9776;</span> Central Demandas
           </button>
         </nav>
         <div className={styles.sidebarFooter}>

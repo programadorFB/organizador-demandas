@@ -35,6 +35,8 @@ export const demands = {
   urgentPending: () => request('/demands/urgent/pending'),
   delete: (id) => request(`/demands/${id}`, { method: 'DELETE' }),
   assignSprint: (id, sprint_id) => request(`/demands/${id}/sprint`, { method: 'PATCH', body: JSON.stringify({ sprint_id }) }),
+  admins: () => request('/demands/admins'),
+  redirect: (id, admin_id) => request(`/demands/${id}/redirect`, { method: 'PATCH', body: JSON.stringify({ admin_id }) }),
 };
 
 // Attachments
@@ -241,5 +243,13 @@ export const kommo = {
   getCustomFields: () => request('/kommo/custom-fields'),
   getWebhookStats: () => request('/kommo/webhook-stats'),
   getWebhookEvents: (limit = 50) => request(`/kommo/webhook-events?limit=${limit}`),
+  getMetrics: (period = 'today') => request(`/kommo/metrics?period=${period}`),
+  getUnsortedLeads: (limit = 50) => request(`/kommo/unsorted-leads?limit=${limit}`),
+  getMessages: (params = {}) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+    return request(`/kommo/messages${qs ? `?${qs}` : ''}`);
+  },
+  getConversations: () => request('/kommo/conversations'),
+  reprocess: () => request('/kommo/reprocess', { method: 'POST' }),
 };
 

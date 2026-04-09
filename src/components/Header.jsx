@@ -67,6 +67,11 @@ export default function Header() {
             </NavLink>
           )}
           {isAdmin && (
+            <NavLink to="/admin-demandas" className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}>
+              Central Demandas
+            </NavLink>
+          )}
+          {isAdmin && (
             <NavLink to="/design/board" className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}>
               Design Board
             </NavLink>

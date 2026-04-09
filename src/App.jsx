@@ -17,6 +17,7 @@ import DesignBoardPage from './pages/DesignBoardPage';
 import DesignAnalyticsPage from './pages/DesignAnalyticsPage';
 import SalesDashboardPage from './pages/SalesDashboardPage';
 import SellerPanelPage from './pages/SellerPanelPage';
+import AdminDemandsPage from './pages/AdminDemandsPage';
 
 function AppRoutes() {
   const { user } = useAuth();
@@ -49,6 +50,10 @@ function AppRoutes() {
         } />
         <Route path="/admin" element={
           <ProtectedRoute roles={['admin']}><AdminPage /></ProtectedRoute>
+        } />
+        {/* Admin Demandas */}
+        <Route path="/admin-demandas" element={
+          <ProtectedRoute roles={['admin', 'design_admin', 'sales_admin']}><AdminDemandsPage /></ProtectedRoute>
         } />
         {/* Design Board */}
         <Route path="/design" element={<DesignSelectPage />} />
