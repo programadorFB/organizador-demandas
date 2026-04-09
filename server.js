@@ -2144,20 +2144,27 @@ async function refreshKommoToken(config) {
 // Salvar/atualizar config Kommo
 app.post('/api/kommo/config', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
   try {
-    const { subdomain, client_id, client_secret, redirect_uri } = req.body;
+    let { subdomain, client_id, client_secret, redirect_uri } = req.body;
     if (!subdomain || !client_id || !client_secret) {
       return res.status(400).json({ error: 'Campos obrigatórios: subdomain, client_id, client_secret' });
     }
+    // Normalizar subdomain: extrair só o nome (ex: "https://fuzabalta7d.kommo.com" -> "fuzabalta7d")
+    subdomain = subdomain.replace(/^https?:\/\//, '').replace(/\.kommo\.com.*$/, '').replace(/\.amocrm\.com.*$/, '').trim();
+    // Garantir redirect_uri com HTTPS
+    const defaultRedirect = `https://${req.get('host')}/api/kommo/callback`;
+    if (!redirect_uri) redirect_uri = defaultRedirect;
+    else if (redirect_uri.startsWith('http://')) redirect_uri = redirect_uri.replace('http://', 'https://');
+
     const exists = await pool.query('SELECT id FROM kommo_config LIMIT 1');
     if (exists.rows.length) {
       await pool.query(
         `UPDATE kommo_config SET subdomain=$1, client_id=$2, client_secret=$3, redirect_uri=$4, updated_at=NOW() WHERE id=$5`,
-        [subdomain, client_id, client_secret, redirect_uri || `${req.protocol}://${req.get('host')}/api/kommo/callback`, exists.rows[0].id]
+        [subdomain, client_id, client_secret, redirect_uri, exists.rows[0].id]
       );
     } else {
       await pool.query(
         `INSERT INTO kommo_config (subdomain, client_id, client_secret, redirect_uri) VALUES ($1, $2, $3, $4)`,
-        [subdomain, client_id, client_secret, redirect_uri || `${req.protocol}://${req.get('host')}/api/kommo/callback`]
+        [subdomain, client_id, client_secret, redirect_uri]
       );
     }
     const config = await pool.query('SELECT id, subdomain, client_id, redirect_uri, connected, pipeline_id, pipeline_name, stage_new_lead, stage_responded, stage_interested, stage_won, stage_lost, revenue_field_id, last_sync_at, sync_interval_minutes FROM kommo_config LIMIT 1');
@@ -2258,6 +2265,104 @@ app.patch('/api/kommo/pipeline-config', authMiddleware, roleMiddleware(...salesA
   } catch (err) {
     res.status(500).json({ error: 'Erro ao salvar pipeline config' });
   }
+});
+
+// ─── Pipeline Stages ───
+
+// Sincronizar stages de TODOS os pipelines da Kommo
+app.post('/api/kommo/sync-stages', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const data = await kommoRequest('GET', '/leads/pipelines');
+    const pipelines = data?._embedded?.pipelines || [];
+    await pool.query('DELETE FROM kommo_pipeline_stages');
+    let count = 0;
+    for (const p of pipelines) {
+      const statuses = p._embedded?.statuses || [];
+      for (const s of statuses) {
+        if (s.id === 142 || s.id === 143) continue; // Skip "Venda ganha/perdida" (sistema)
+        await pool.query(
+          `INSERT INTO kommo_pipeline_stages (pipeline_id, status_id, stage_name, stage_order, stage_color)
+           VALUES ($1,$2,$3,$4,$5) ON CONFLICT (status_id) DO UPDATE SET stage_name=$3, stage_order=$4, stage_color=$5`,
+          [p.id, s.id, s.name, s.sort || 0, s.color || '#c1c1c1']
+        );
+        count++;
+      }
+    }
+    res.json({ ok: true, pipelines: pipelines.length, stages: count });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Listar stages
+app.get('/api/kommo/stages', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM kommo_pipeline_stages ORDER BY pipeline_id, stage_order');
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Contagem de leads agrupada por etapa (todas as pipelines)
+app.get('/api/kommo/leads-by-stage', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        ps.stage_name, ps.stage_color, ps.pipeline_id, ps.status_id, ps.stage_order,
+        COUNT(lc.kommo_lead_id) as lead_count
+      FROM kommo_pipeline_stages ps
+      LEFT JOIN kommo_leads_cache lc ON lc.status_id = ps.status_id
+      GROUP BY ps.id, ps.stage_name, ps.stage_color, ps.pipeline_id, ps.status_id, ps.stage_order
+      HAVING COUNT(lc.kommo_lead_id) > 0
+      ORDER BY ps.stage_order, ps.stage_name
+    `);
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Contagem de leads agrupada por categorias fixas (dashboard cards)
+app.get('/api/kommo/leads-summary', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    // Categorias pedidas pela Sara — ordem importa (mais especifico primeiro)
+    const categories = [
+      { name: 'DESQUALIFICADOS', color: '#ff8f92', patterns: ['desqualificad', 'desclassificad', 'detrator', 'reembolso', 'perdida'] },
+      { name: 'SUPORTE', color: '#eb93ff', patterns: ['suporte', 'pos venda', 'pós venda', 'retenção', 'retençâo', 'retencao', 'entregáve', 'entregave'] },
+      { name: 'VENDAS', color: '#00b894', patterns: ['vendas', 'vendeu black', 'venda de black', 'black code', 'aluno black', 'venda - ok', 'convertido', 'venda ganha', 'garimpo'] },
+      { name: 'EM PROCESSO DE VENDAS', color: '#87f2c0', patterns: ['processo de venda', 'rmkt', 'remarketing', 'ofereci black', 'ofereceu black', 'negociac', 'oferta feita', 'aquecendo', 'fup ', 'interesse', 'quer black', 'esperando resposta', 'planilha antig', 'comunidade', 'já chamou'] },
+      { name: 'INICIANTE', color: '#ffdc7f', patterns: ['iniciante', 'ftd', 'primeiro dep', 'cadastrou', 'cadastro', '1\\u00b0 acesso', 'fez ftd', 'jogador'] },
+      { name: 'LEAD DE ENTRADA', color: '#c1c1c1', patterns: ['leads de entrada', 'etapa de leads', 'contato inicial', 'lead aquecido', 'chamei hoje', 'qualifica', 'primeiro contato', 'promotor'] },
+    ];
+
+    // Buscar todos os stages com contagem de leads
+    const result = await pool.query(`
+      SELECT ps.stage_name, COUNT(lc.kommo_lead_id) as lead_count
+      FROM kommo_leads_cache lc
+      JOIN kommo_pipeline_stages ps ON ps.status_id = lc.status_id
+      GROUP BY ps.stage_name
+    `);
+
+    // Classificar cada stage em uma categoria
+    const summary = categories.map(cat => ({ ...cat, lead_count: 0 }));
+    let unclassified = 0;
+
+    for (const row of result.rows) {
+      const name = row.stage_name.toLowerCase();
+      let matched = false;
+      for (const cat of summary) {
+        if (cat.patterns.some(p => name.includes(p))) {
+          cat.lead_count += parseInt(row.lead_count);
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) unclassified += parseInt(row.lead_count);
+    }
+
+    const total = await pool.query('SELECT COUNT(*) as total FROM kommo_leads_cache');
+
+    res.json({
+      stages: summary.map(({ patterns, ...rest }) => rest),
+      total: parseInt(total.rows[0].total),
+      unclassified,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Listar users do Kommo
@@ -2516,14 +2621,17 @@ app.post('/api/kommo/webhook', async (req, res) => {
       for (const lead of leads) {
         const leadId = parseInt(lead.id);
         const statusId = parseInt(lead.status_id);
-        const responsibleId = parseInt(lead.responsible_user_id);
+        const rawResponsible = parseInt(lead.responsible_user_id) || 0;
+        const modifiedBy = parseInt(lead.modified_user_id) || 0;
+        // Usar modified_user_id como fallback quando responsible é 0
+        const responsibleId = rawResponsible || modifiedBy;
         const price = parseFloat(lead.price || 0);
         const pipelineId = parseInt(lead.pipeline_id || cfg?.pipeline_id || 0);
 
         await pool.query(
           `INSERT INTO kommo_leads_cache (kommo_lead_id, kommo_user_id, pipeline_id, status_id, revenue, lead_created_at, lead_updated_at, synced_at)
            VALUES ($1, $2, $3, $4, $5, to_timestamp($6), to_timestamp($7), NOW())
-           ON CONFLICT (kommo_lead_id) DO UPDATE SET kommo_user_id=$2, pipeline_id=$3, status_id=$4, revenue=$5, lead_updated_at=to_timestamp($7), synced_at=NOW()`,
+           ON CONFLICT (kommo_lead_id) DO UPDATE SET kommo_user_id=CASE WHEN $2 != 0 THEN $2 ELSE kommo_leads_cache.kommo_user_id END, pipeline_id=$3, status_id=$4, revenue=$5, lead_updated_at=to_timestamp($7), synced_at=NOW()`,
           [leadId, responsibleId, pipelineId, statusId, price, lead.created_at || 0, lead.updated_at || 0]
         );
         const sid = sellerMap[responsibleId];
@@ -2576,11 +2684,20 @@ app.post('/api/kommo/webhook', async (req, res) => {
             : null
           : null;
         const sourceData = item.source_data || {};
-        const initialMsg = sourceData.data?.[0]?.text || null;
+        const initialMsg = sourceData.data?.length
+          ? sourceData.data.map(d => d.text).filter(Boolean).join('\n')
+          : null;
+
+        // Tentar identificar vendedor pelo lead no cache ou pelo modified_user_id
+        let sellerKommoId = null;
+        if (leadData?.id) {
+          const cached = await pool.query('SELECT kommo_user_id FROM kommo_leads_cache WHERE kommo_lead_id = $1', [parseInt(leadData.id)]);
+          if (cached.rows[0]?.kommo_user_id) sellerKommoId = cached.rows[0].kommo_user_id;
+        }
 
         await pool.query(
-          `INSERT INTO kommo_unsorted_leads (uid, kommo_lead_id, lead_name, contact_id, contact_name, contact_phone, source, source_name, category, pipeline_id, initial_message, event_action, webhook_event_id)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+          `INSERT INTO kommo_unsorted_leads (uid, kommo_lead_id, lead_name, contact_id, contact_name, contact_phone, source, source_name, category, pipeline_id, initial_message, seller_kommo_id, event_action, webhook_event_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
           [
             item.uid || null,
             leadData ? parseInt(leadData.id) : null,
@@ -2593,6 +2710,7 @@ app.post('/api/kommo/webhook', async (req, res) => {
             item.category || null,
             leadData ? parseInt(leadData.pipeline_id) : null,
             initialMsg,
+            sellerKommoId,
             action,
             eventId
           ]
@@ -2605,23 +2723,34 @@ app.post('/api/kommo/webhook', async (req, res) => {
     const talkItems = body?.talk?.add || body?.talk?.update || [];
     if (talkItems.length) {
       for (const t of talkItems) {
-        const talkId = parseInt(t.talk_id);
-        const responsibleId = parseInt(t.responsible_user_id || 0) || null;
+        const talkId = t.talk_id ? parseInt(t.talk_id) : null;
+        if (!talkId) continue;
+
+        // Buscar vendedor responsável pelo lead associado
+        let sellerKommoId = null;
+        const leadId = t.entity_id ? parseInt(t.entity_id) : null;
+        if (leadId) {
+          const cached = await pool.query('SELECT kommo_user_id FROM kommo_leads_cache WHERE kommo_lead_id = $1', [leadId]);
+          if (cached.rows[0]?.kommo_user_id && cached.rows[0].kommo_user_id !== 0) {
+            sellerKommoId = cached.rows[0].kommo_user_id;
+          }
+        }
+
         await pool.query(
           `INSERT INTO kommo_conversations (talk_id, chat_id, lead_id, contact_id, origin, is_read, is_in_work, rate, seller_kommo_id, webhook_event_id, updated_at)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
            ON CONFLICT (talk_id) DO UPDATE SET
-             is_read=$6, is_in_work=$7, rate=$8, seller_kommo_id=COALESCE($9, kommo_conversations.seller_kommo_id), updated_at=NOW()`,
+             is_read=$6, is_in_work=$7, rate=$8, seller_kommo_id=COALESCE(NULLIF($9, 0), kommo_conversations.seller_kommo_id), updated_at=NOW()`,
           [
             talkId,
             t.chat_id || null,
-            t.entity_id ? parseInt(t.entity_id) : null,
+            leadId,
             t.contact_id ? parseInt(t.contact_id) : null,
             t.origin || null,
             t.is_read === '1' || t.is_read === true,
             t.is_in_work === '1' || t.is_in_work === true,
             parseInt(t.rate || 0),
-            responsibleId,
+            sellerKommoId,
             eventId
           ]
         );
@@ -2639,7 +2768,22 @@ app.post('/api/kommo/webhook', async (req, res) => {
           const exists = await pool.query('SELECT 1 FROM kommo_messages WHERE message_id = $1', [msgId]);
           if (exists.rows.length) continue;
         }
-        const responsibleId = parseInt(msg.responsible_user_id || 0) || null;
+
+        // Identificar vendedor: pelo lead associado ou pela conversa
+        let sellerKommoId = null;
+        const leadId = msg.entity_id ? parseInt(msg.entity_id) : (msg.element_id ? parseInt(msg.element_id) : null);
+        if (leadId) {
+          const cached = await pool.query('SELECT kommo_user_id FROM kommo_leads_cache WHERE kommo_lead_id = $1', [leadId]);
+          if (cached.rows[0]?.kommo_user_id && cached.rows[0].kommo_user_id !== 0) {
+            sellerKommoId = cached.rows[0].kommo_user_id;
+          }
+        }
+        // Fallback: buscar pela conversa (talk_id)
+        if (!sellerKommoId && msg.talk_id) {
+          const conv = await pool.query('SELECT seller_kommo_id FROM kommo_conversations WHERE talk_id = $1', [parseInt(msg.talk_id)]);
+          if (conv.rows[0]?.seller_kommo_id) sellerKommoId = conv.rows[0].seller_kommo_id;
+        }
+
         await pool.query(
           `INSERT INTO kommo_messages (message_id, talk_id, chat_id, lead_id, contact_id, author_name, author_type, text, msg_type, origin, seller_kommo_id, message_at, webhook_event_id)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
@@ -2647,14 +2791,14 @@ app.post('/api/kommo/webhook', async (req, res) => {
             msgId,
             msg.talk_id ? parseInt(msg.talk_id) : null,
             msg.chat_id || null,
-            msg.entity_id ? parseInt(msg.entity_id) : (msg.element_id ? parseInt(msg.element_id) : null),
+            leadId,
             msg.contact_id ? parseInt(msg.contact_id) : null,
             msg.author?.name || null,
             msg.author?.type || msg.type || null,
             msg.text || null,
             msg.type || null,
             msg.origin || null,
-            responsibleId,
+            sellerKommoId,
             msg.created_at ? new Date(parseInt(msg.created_at) * 1000) : new Date(),
             eventId
           ]
