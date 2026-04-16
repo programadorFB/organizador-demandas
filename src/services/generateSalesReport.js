@@ -679,3 +679,245 @@ export function generateSellerExcel({ seller, reports, totals, month, year }) {
 
   XLSX.writeFile(wb, `Vendas_${seller.name?.replace(/\s/g, '_')}_${MONTHS[month - 1]}_${year}.xlsx`);
 }
+
+// ═══════════════════════════════════════════════════
+// PDF — Leads por Setor Kommo (por atendente)
+// ═══════════════════════════════════════════════════
+export function generateKommoLeadsPDF({ categories, sellers, summary }) {
+  const doc = new jsPDF('l', 'mm', 'a4'); // landscape
+  const W = 297, H = 210, MARGIN = 15;
+  const contentW = W - MARGIN * 2;
+  let y = 0;
+
+  function paintBg() {
+    doc.setFillColor(...DARK);
+    doc.rect(0, 0, W, H, 'F');
+    doc.setFillColor(...CORAL);
+    doc.rect(0, 0, W, 2, 'F');
+  }
+
+  function newPage() { doc.addPage(); paintBg(); y = 20; }
+  function checkPage(need = 30) { if (y + need > H - 20) newPage(); }
+
+  function sectionTitle(text) {
+    checkPage(20);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...CORAL);
+    doc.text(text, MARGIN, y);
+    y += 10;
+  }
+
+  // ─── CAPA ───
+  paintBg();
+  doc.setFillColor(...CORAL);
+  doc.rect(0, 0, W, 4, 'F');
+
+  doc.setTextColor(...CORAL);
+  doc.setFontSize(28);
+  doc.setFont('helvetica', 'bold');
+  doc.text('LEADS POR SETOR', W / 2, 40, { align: 'center' });
+
+  doc.setFontSize(14);
+  doc.setTextColor(...MUTED);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Distribuicao de Leads por Atendente — Kommo CRM', W / 2, 53, { align: 'center' });
+
+  doc.setFontSize(9);
+  doc.setTextColor(...DIM);
+  const dateStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const timeStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  doc.text(`Gerado em ${dateStr} as ${timeStr}`, W / 2, 63, { align: 'center' });
+
+  // Summary cards
+  if (summary?.stages) {
+    const cardY = 75;
+    const boxW = contentW / summary.stages.length;
+    summary.stages.forEach((s, i) => {
+      const x = MARGIN + i * boxW;
+      doc.setFillColor(...ROW_BG);
+      doc.roundedRect(x + 2, cardY, boxW - 4, 28, 3, 3, 'F');
+
+      const hex = s.color || '#6c5ce7';
+      const r = parseInt(hex.slice(1,3), 16), g = parseInt(hex.slice(3,5), 16), b = parseInt(hex.slice(5,7), 16);
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(r, g, b);
+      doc.text(String(s.lead_count || 0), x + boxW / 2, cardY + 14, { align: 'center' });
+
+      doc.setFontSize(6.5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...DIM);
+      doc.text(s.name, x + boxW / 2, cardY + 22, { align: 'center' });
+    });
+  }
+
+  doc.setDrawColor(...CORAL);
+  doc.setLineWidth(0.3);
+  doc.line(MARGIN + 60, 110, W - MARGIN - 60, 110);
+
+  // Total
+  doc.setFontSize(10);
+  doc.setTextColor(...MUTED);
+  doc.text(`Total de leads: ${summary?.total || 0}  |  Nao classificados: ${summary?.unclassified || 0}`, W / 2, 118, { align: 'center' });
+
+  // ─── PAGINA 2: Tabela completa ───
+  newPage();
+  sectionTitle('DISTRIBUICAO POR ATENDENTE');
+
+  const cols = ['Atendente', ...categories, 'TOTAL'];
+  const body = sellers.map(s => {
+    const row = [s.name];
+    categories.forEach(c => row.push(s[c] || 0));
+    row.push(s.total);
+    return row;
+  });
+
+  // Linha de totais
+  const totalsRow = ['TOTAL'];
+  categories.forEach(c => {
+    totalsRow.push(sellers.reduce((sum, s) => sum + (s[c] || 0), 0));
+  });
+  totalsRow.push(sellers.reduce((sum, s) => sum + s.total, 0));
+  body.push(totalsRow);
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: MARGIN, right: MARGIN },
+    head: [cols],
+    body,
+    theme: 'plain',
+    styles: { fontSize: 8.5, textColor: WHITE, cellPadding: 4, fillColor: false },
+    headStyles: { fillColor: [30, 30, 45], textColor: CORAL, fontStyle: 'bold', fontSize: 7.5 },
+    alternateRowStyles: { fillColor: ROW_ALT },
+    bodyStyles: { fillColor: ROW_BG },
+    columnStyles: {
+      0: { fontStyle: 'bold', textColor: WHITE },
+      [cols.length - 1]: { fontStyle: 'bold', textColor: PURPLE, halign: 'center' },
+    },
+    didParseCell: (data) => {
+      if (data.section === 'body' && data.row.index === body.length - 1) {
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.textColor = CORAL;
+        data.cell.styles.fillColor = [30, 30, 45];
+      }
+      if (data.section === 'body' && data.column.index > 0 && data.column.index < cols.length - 1) {
+        data.cell.styles.halign = 'center';
+      }
+    },
+  });
+
+  y = doc.lastAutoTable.finalY + 15;
+
+  // Grafico de barras — Total por atendente
+  checkPage(sellers.length * 13 + 15);
+  sectionTitle('TOTAL DE LEADS POR ATENDENTE');
+
+  const sorted = [...sellers].sort((a, b) => b.total - a.total);
+  const maxTotal = Math.max(...sorted.map(s => s.total), 1);
+
+  sorted.forEach((s, i) => {
+    checkPage(13);
+    const barMaxW = contentW - 70;
+    const barW = (s.total / maxTotal) * barMaxW;
+    const color = SELLER_COLORS[i % SELLER_COLORS.length];
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...WHITE);
+    doc.text(s.name, MARGIN, y + 6);
+
+    doc.setFillColor(...BAR_BG);
+    doc.roundedRect(MARGIN + 40, y, barMaxW, 9, 2, 2, 'F');
+    if (barW > 0) {
+      doc.setFillColor(...color);
+      doc.roundedRect(MARGIN + 40, y, Math.max(barW, 3), 9, 2, 2, 'F');
+    }
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(...PURPLE);
+    doc.text(String(s.total), MARGIN + 43 + barMaxW, y + 6);
+    y += 13;
+  });
+
+  // ─── FOOTER ───
+  const pageCount = doc.internal.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    if (i === 1) continue;
+    doc.setFillColor(...CORAL);
+    doc.rect(0, H - 3, W, 3, 'F');
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...DIM);
+    doc.text(`Leads por Setor — Kommo CRM — Pagina ${i}/${pageCount}`, W / 2, H - 5, { align: 'center' });
+  }
+
+  doc.save(`Leads_Setor_Kommo_${new Date().toISOString().split('T')[0]}.pdf`);
+}
+
+// ═══════════════════════════════════════════════════
+// EXCEL — Leads por Setor Kommo (por atendente)
+// ═══════════════════════════════════════════════════
+export function generateKommoLeadsExcel({ categories, sellers, summary }) {
+  const wb = XLSX.utils.book_new();
+
+  // ── Aba: Por Atendente ──
+  const headerRow = ['Atendente', ...categories, 'TOTAL'];
+  const dataRows = sellers.map(s => {
+    const row = [s.name];
+    categories.forEach(c => row.push(s[c] || 0));
+    row.push(s.total);
+    return row;
+  });
+
+  const totalsRow = ['TOTAL'];
+  categories.forEach(c => {
+    totalsRow.push(sellers.reduce((sum, s) => sum + (s[c] || 0), 0));
+  });
+  totalsRow.push(sellers.reduce((sum, s) => sum + s.total, 0));
+  dataRows.push(totalsRow);
+
+  const sheetData = [
+    ['LEADS POR SETOR — KOMMO CRM'],
+    [`Gerado em ${new Date().toLocaleDateString('pt-BR')}`],
+    [],
+    headerRow,
+    ...dataRows,
+    [],
+    ['Total de leads no sistema', summary?.total || 0],
+    ['Leads nao classificados', summary?.unclassified || 0],
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+  ws['!cols'] = [
+    { wch: 20 },
+    ...categories.map(() => ({ wch: 18 })),
+    { wch: 12 },
+  ];
+  XLSX.utils.book_append_sheet(wb, ws, 'Leads por Setor');
+
+  // ── Aba: Resumo Categorias ──
+  if (summary?.stages) {
+    const catData = [
+      ['RESUMO POR CATEGORIA'],
+      [],
+      ['Categoria', 'Leads', '% do Total'],
+      ...summary.stages.map(s => [
+        s.name,
+        s.lead_count || 0,
+        summary.total > 0 ? parseFloat(((s.lead_count / summary.total) * 100).toFixed(1)) : 0,
+      ]),
+      [],
+      ['Nao classificados', summary.unclassified || 0, summary.total > 0 ? parseFloat(((summary.unclassified / summary.total) * 100).toFixed(1)) : 0],
+      ['TOTAL', summary.total || 0, 100],
+    ];
+
+    const wsCat = XLSX.utils.aoa_to_sheet(catData);
+    wsCat['!cols'] = [{ wch: 24 }, { wch: 12 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, wsCat, 'Resumo Categorias');
+  }
+
+  XLSX.writeFile(wb, `Leads_Setor_Kommo_${new Date().toISOString().split('T')[0]}.xlsx`);
+}

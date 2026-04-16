@@ -53,7 +53,25 @@
       "Bash(sc query:*)",
       "Bash(where cloudflared:*)",
       "Bash(docker restart:*)",
-      "Bash(docker exec:*)"
+      "Bash(docker exec:*)",
+      "Bash(docker volume:*)",
+      "Bash(docker run:*)",
+      "Bash(docker stop:*)",
+      "Bash(docker rm:*)",
+      "Bash(npm run:*)",
+      "Bash(taskkill //F //FI \"WINDOWTITLE eq *server.js*\")",
+      "Bash(awk '{print $2}')",
+      "Bash(xargs kill:*)",
+      "Bash(netstat -ano)",
+      "Bash(awk '{print $5}')",
+      "Bash(taskkill:*)",
+      "Bash(pkill -f \"ssh -f -N -L 5434\")",
+      "Bash(nohup node:*)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(GIT_TRACE=1 git push origin main)",
+      "Bash(npm i *)",
+      "Bash(npm ls *)"
     ]
   }
 }

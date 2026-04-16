@@ -137,6 +137,7 @@ export default function SellerPanelPage() {
         <button className={`${styles.tabBtn} ${activeTab === 'painel' ? styles.tabActive : ''}`} onClick={() => setActiveTab('painel')}>Meu Painel</button>
         <button className={`${styles.tabBtn} ${activeTab === 'chat' ? styles.tabActive : ''}`} onClick={() => setActiveTab('chat')}>Chat da Equipe</button>
         <button className={`${styles.tabBtn} ${activeTab === 'conhecimento' ? styles.tabActive : ''}`} onClick={() => setActiveTab('conhecimento')}>Conhecimento</button>
+        <button className={`${styles.tabBtn}`} onClick={() => navigate('/nova-demanda')}>Mandar Demanda</button>
         <button className={`${styles.tabBtn} ${activeTab === 'aparencia' ? styles.tabActive : ''}`} onClick={() => setActiveTab('aparencia')}>Aparencia</button>
       </div>
 

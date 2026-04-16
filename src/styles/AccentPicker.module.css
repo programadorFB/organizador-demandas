@@ -1,0 +1,165 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1.4rem;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.groupTitle {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted, #8a8a8a);
+  margin: 0;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+}
+
+.gridAnime {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem;
+}
+
+.swatch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.7rem 0.5rem 0.65rem;
+  background: color-mix(in srgb, var(--sw) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--sw) 25%, transparent);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  overflow: hidden;
+  min-height: 78px;
+}
+
+.swatch::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% -20%, color-mix(in srgb, var(--sw) 35%, transparent), transparent 60%);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+
+.swatch:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--sw) 55%, transparent);
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--sw) 20%, transparent);
+}
+
+.swatch:hover::before {
+  opacity: 1;
+}
+
+.active {
+  border-color: var(--sw);
+  background: color-mix(in srgb, var(--sw) 16%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sw) 30%, transparent), 0 6px 22px color-mix(in srgb, var(--sw) 30%, transparent);
+}
+
+.active::before {
+  opacity: 1;
+}
+
+.chip {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--sw);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0a0a0a;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 30%, transparent), 0 2px 6px color-mix(in srgb, var(--sw) 40%, transparent);
+}
+
+/* Anime swatches mostram as 3 cores da paleta em anéis concêntricos */
+.swatchAnime {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--sw) 10%, transparent) 0%,
+    color-mix(in srgb, var(--sw-2) 10%, transparent) 100%
+  );
+  border: 1px solid color-mix(in srgb, var(--sw) 25%, transparent);
+  min-height: 96px;
+}
+
+.swatchAnime:hover {
+  border-color: color-mix(in srgb, var(--sw) 60%, transparent);
+  box-shadow:
+    0 8px 24px color-mix(in srgb, var(--sw) 25%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--sw-2) 30%, transparent);
+}
+
+.swatchAnime.active {
+  border-color: var(--sw);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--sw) 22%, transparent) 0%,
+    color-mix(in srgb, var(--sw-2) 18%, transparent) 100%
+  );
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--sw) 35%, transparent),
+    0 10px 28px color-mix(in srgb, var(--sw) 30%, transparent);
+}
+
+.animeRing {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background:
+    conic-gradient(
+      var(--sw) 0deg 150deg,
+      var(--sw-2) 150deg 280deg,
+      var(--sw-3) 280deg 360deg
+    );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, #fff 18%, transparent),
+    0 4px 12px color-mix(in srgb, var(--sw) 35%, transparent);
+}
+
+.animeRing .chip {
+  width: 20px;
+  height: 20px;
+  background: #0a0a0a;
+  color: var(--sw);
+  box-shadow: none;
+}
+
+.swatchName {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-primary, #ececec);
+  text-align: center;
+  line-height: 1.1;
+}
+
+.swatchSub {
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: color-mix(in srgb, var(--sw) 60%, var(--text-muted, #999));
+  text-align: center;
+  line-height: 1;
+}

@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import SalesChat from '../components/SalesChat';
 import KnowledgeBase from '../components/KnowledgeBase';
-import { generateSalesPDF, generateSalesExcel, generateSellerPDF, generateSellerExcel } from '../services/generateSalesReport';
+import { generateSalesPDF, generateSalesExcel, generateSellerPDF, generateSellerExcel, generateKommoLeadsPDF, generateKommoLeadsExcel } from '../services/generateSalesReport';
 import ThemeSettings from '../components/ThemeSettings';
 import styles from '../styles/SalesDashboard.module.css';
 
@@ -26,6 +26,9 @@ function KommoConfig({ sellers }) {
   const [syncDate, setSyncDate] = useState(new Date().toISOString().split('T')[0]);
   const [webhookStats, setWebhookStats] = useState(null);
   const [webhookEvents, setWebhookEvents] = useState([]);
+  const [stages, setStages] = useState([]);
+  const [stagesByPipeline, setStagesByPipeline] = useState({});
+  const [syncingStages, setSyncingStages] = useState(false);
   const [msg, setMsg] = useState('');
   const [loading, setLoading] = useState(true);
 
@@ -140,6 +143,31 @@ function KommoConfig({ sellers }) {
     } catch {}
   };
 
+  const loadStages = async () => {
+    try {
+      const s = await kommo.getStages();
+      setStages(s);
+      // Agrupar por pipeline
+      const grouped = {};
+      for (const st of s) {
+        const key = st.pipeline_id;
+        if (!grouped[key]) grouped[key] = [];
+        grouped[key].push(st);
+      }
+      setStagesByPipeline(grouped);
+    } catch {}
+  };
+
+  const syncFromKommo = async () => {
+    setSyncingStages(true);
+    try {
+      const result = await kommo.syncStages();
+      setMsg(`Sincronizado: ${result.pipelines} pipelines, ${result.stages} etapas`);
+      await loadStages();
+    } catch (err) { setMsg('Erro: ' + err.message); }
+    setSyncingStages(false);
+  };
+
   const fmtDt = (d) => d ? new Date(d).toLocaleString('pt-BR') : '--';
 
   const WEBHOOK_LABELS = {
@@ -177,6 +205,7 @@ function KommoConfig({ sellers }) {
         <button className={`${styles.shiftTab} ${configTab === 'users' ? styles.shiftActive : ''}`} onClick={() => { setConfigTab('users'); if (cfg?.connected) loadKommoUsers(); }}>Mapeamento Users</button>
         <button className={`${styles.shiftTab} ${configTab === 'sync' ? styles.shiftActive : ''}`} onClick={() => { setConfigTab('sync'); loadSyncLogs(); }}>Sync</button>
         <button className={`${styles.shiftTab} ${configTab === 'webhook' ? styles.shiftActive : ''}`} onClick={() => { setConfigTab('webhook'); loadWebhookData(); }}>Webhook</button>
+        <button className={`${styles.shiftTab} ${configTab === 'etapas' ? styles.shiftActive : ''}`} onClick={() => { setConfigTab('etapas'); loadStages(); }}>Etapas</button>
       </div>
 
       {/* ── CONEXAO ── */}
@@ -468,6 +497,52 @@ function KommoConfig({ sellers }) {
           </div>
         </div>
       )}
+
+      {/* ── ETAPAS DO PIPELINE ── */}
+      {configTab === 'etapas' && (
+        <div className={styles.configSection}>
+          <h3 className={styles.configSubtitle}>Etapas dos Pipelines Kommo</h3>
+          <p className={styles.configHint}>
+            Sincronize as etapas de todos os pipelines do Kommo. Os cards do dashboard mostram a quantidade de leads em cada etapa.
+          </p>
+
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+            <button className="btn btn-primary" onClick={syncFromKommo} disabled={syncingStages}>
+              {syncingStages ? 'Sincronizando...' : 'Sincronizar da Kommo'}
+            </button>
+            <button className="btn btn-ghost" onClick={loadStages}>Atualizar</button>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem', alignSelf: 'center' }}>
+              {stages.length} etapas em {Object.keys(stagesByPipeline).length} pipelines
+            </span>
+          </div>
+
+          {Object.entries(stagesByPipeline).map(([pipeId, pipeStages]) => (
+            <div key={pipeId} style={{ marginBottom: '1.2rem' }}>
+              <h4 style={{ fontSize: '0.85rem', marginBottom: '0.5rem', color: 'var(--text-secondary)' }}>
+                Pipeline {pipeId}
+              </h4>
+              <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                {pipeStages.sort((a, b) => a.stage_order - b.stage_order).map(s => (
+                  <span key={s.status_id} style={{
+                    background: 'var(--bg-primary)', border: '1px solid var(--border)',
+                    borderRadius: '6px', padding: '0.3rem 0.7rem', fontSize: '0.78rem',
+                    display: 'flex', alignItems: 'center', gap: '0.4rem',
+                  }}>
+                    <span style={{ width: '10px', height: '10px', borderRadius: '3px', background: s.stage_color, flexShrink: 0 }} />
+                    <span style={{ color: 'var(--text-primary)' }}>{s.stage_name}</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {stages.length === 0 && (
+            <p style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+              Nenhuma etapa sincronizada. Clique em "Sincronizar da Kommo" para importar.
+            </p>
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -489,6 +564,8 @@ export default function SalesDashboardPage() {
   const [goalForm, setGoalForm] = useState({ goal_leads: 0, goal_sales: 0, goal_revenue: 0 });
   const [loading, setLoading] = useState(true);
   const [kommoStats, setKommoStats] = useState(null);
+  const [leadsSummary, setLeadsSummary] = useState(null);
+  const [sellerLeads, setSellerLeads] = useState(null);
   // Relatorios individuais
   const [sellerDetail, setSellerDetail] = useState(null);
   const [sellerDetailLoading, setSellerDetailLoading] = useState(false);
@@ -514,7 +591,10 @@ export default function SalesDashboardPage() {
 
   const loadKommoStats = useCallback(async () => {
     try { setKommoStats(await kommo.getWebhookStats()); } catch {}
-  }, []);
+    const params = { date, shift: shift || '' };
+    try { setLeadsSummary(await kommo.getLeadsSummary(params)); } catch {}
+    try { setSellerLeads(await kommo.getLeadsBySeller(params)); } catch {}
+  }, [date, shift]);
 
   useEffect(() => {
     Promise.all([loadStats(), loadSellers(), loadKommoStats()]).finally(() => setLoading(false));
@@ -584,7 +664,7 @@ export default function SalesDashboardPage() {
 
   if (loading) return <div className={styles.loadWrap}><div className={styles.spinner} /><p>Carregando painel...</p></div>;
 
-  const ranking = stats?.daily ? [...stats.daily].sort((a, b) => parseFloat(b.revenue) - parseFloat(a.revenue)) : [];
+  const ranking = sellerLeads?.sellers ? [...sellerLeads.sellers].sort((a, b) => (b['VENDAS'] || 0) - (a['VENDAS'] || 0)) : [];
   const daily = stats?.daily || [];
   const totals = stats?.totals || {};
   const ticketMedio = (totals.total_sales > 0) ? (parseFloat(totals.total_revenue) / parseInt(totals.total_sales)) : 0;
@@ -627,6 +707,9 @@ export default function SalesDashboardPage() {
           <button className={`${styles.sideNavBtn} ${page === 'aparencia' ? styles.sideNavActive : ''}`} onClick={() => setPage('aparencia')}>
             <span className={styles.navIcon}>&#9790;</span> Aparencia
           </button>
+          <button className={styles.sideNavBtn} onClick={() => navigate('/nova-demanda')}>
+            <span className={styles.navIcon}>&#43;</span> Mandar Demanda
+          </button>
           <button className={styles.sideNavBtn} onClick={() => navigate('/admin-demandas')}>
             <span className={styles.navIcon}>&#9776;</span> Central Demandas
           </button>
@@ -650,7 +733,25 @@ export default function SalesDashboardPage() {
           <>
             <div className={styles.topBar}>
               <h1 className={styles.pageTitle}>Dashboard Vendas</h1>
-              <div className={styles.dateInput}>
+              <div className={styles.dateInput} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <button 
+                  className="btn btn-ghost btn-sm" 
+                  onClick={() => setDate(new Date().toISOString().split('T')[0])}
+                  style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+                >
+                  Hoje
+                </button>
+                <button 
+                  className="btn btn-ghost btn-sm" 
+                  onClick={() => {
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    setDate(yesterday.toISOString().split('T')[0]);
+                  }}
+                  style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem' }}
+                >
+                  Ontem
+                </button>
                 <input type="date" value={date} onChange={e => setDate(e.target.value)} />
               </div>
             </div>
@@ -673,34 +774,66 @@ export default function SalesDashboardPage() {
               </div>
             )}
 
-            {/* Cards totais */}
+            {/* Cards por etapa do pipeline Kommo */}
             <div className={styles.statsCards}>
-              <div className={styles.statCard}>
-                <span className={styles.statLabel}>LEADS DO TRAFEGO</span>
-                <span className={styles.statNum}>{totals.total_leads || 0}</span>
-                <span className={styles.statSub}>Via trafego pago</span>
-              </div>
-              <div className={styles.statCard}>
-                <span className={styles.statLabel}>LEADS RESPONDIDOS</span>
-                <span className={styles.statNum}>{daily.reduce((s, d) => s + (d.leads_responded || 0), 0)}</span>
-                <span className={styles.statSub}>Primeiro contato feito</span>
-              </div>
-              <div className={styles.statCard}>
-                <span className={styles.statLabel}>CONVERSOES</span>
-                <span className={styles.statNum}>{daily.reduce((s, d) => s + (d.conversions || 0), 0)}</span>
-                <span className={styles.statSub}>Demonstraram interesse</span>
-              </div>
-              <div className={styles.statCard}>
-                <span className={styles.statLabel}>VENDAS FECHADAS</span>
-                <span className={`${styles.statNum} ${styles.greenNum}`}>{totals.total_sales || 0}</span>
-                <span className={styles.statSub}>Compra confirmada</span>
-              </div>
-              <div className={styles.statCard}>
-                <span className={styles.statLabel}>TICKET MEDIO</span>
-                <span className={`${styles.statNum} ${styles.greenNum}`}>{fmt(ticketMedio)}</span>
-                <span className={styles.statSub}>Valor por venda</span>
-              </div>
+              {leadsSummary?.stages?.length > 0 ? leadsSummary.stages.map((s) => (
+                <div className={styles.statCard} key={s.name} style={{ borderTop: `3px solid ${s.color || '#6c5ce7'}` }}>
+                  <span className={styles.statLabel}>{s.name.toUpperCase()}</span>
+                  <span className={styles.statNum} style={{ color: s.color || 'var(--text-primary)' }}>{parseInt(s.lead_count) || 0}</span>
+                  <span className={styles.statSub}>leads nesta etapa</span>
+                </div>
+              )) : (
+                <div className={styles.statCard} style={{ gridColumn: '1 / -1', textAlign: 'center' }}>
+                  <span className={styles.statLabel}>SEM DADOS DE ETAPAS</span>
+                  <span className={styles.statSub}>Va em Kommo {'>'} Etapas e clique em "Sincronizar da Kommo"</span>
+                </div>
+              )}
             </div>
+
+            {/* Tabela leads por vendedora */}
+            {sellerLeads?.sellers?.length > 0 && (
+              <div style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 'var(--radius)', padding: '1rem', marginBottom: '1rem',
+                overflowX: 'auto',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
+                  <h4 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '0.95rem' }}>Leads por Atendente</h4>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => generateKommoLeadsPDF({ categories: sellerLeads.categories, sellers: sellerLeads.sellers, summary: leadsSummary })}>
+                      PDF
+                    </button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => generateKommoLeadsExcel({ categories: sellerLeads.categories, sellers: sellerLeads.sellers, summary: leadsSummary })}>
+                      Excel
+                    </button>
+                  </div>
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                      <th style={{ textAlign: 'left', padding: '0.5rem 0.6rem', color: 'var(--text-muted)', fontWeight: 600 }}>Atendente</th>
+                      {sellerLeads.categories.map(c => (
+                        <th key={c} style={{ textAlign: 'center', padding: '0.5rem 0.4rem', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.7rem' }}>{c}</th>
+                      ))}
+                      <th style={{ textAlign: 'center', padding: '0.5rem 0.6rem', color: 'var(--text-muted)', fontWeight: 600 }}>TOTAL</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sellerLeads.sellers.map((s, i) => (
+                      <tr key={s.name} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg-hover, rgba(0,0,0,0.02))' }}>
+                        <td style={{ padding: '0.5rem 0.6rem', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{s.name}</td>
+                        {sellerLeads.categories.map(c => (
+                          <td key={c} style={{ textAlign: 'center', padding: '0.5rem 0.4rem', color: s[c] > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                            {s[c] || 0}
+                          </td>
+                        ))}
+                        <td style={{ textAlign: 'center', padding: '0.5rem 0.6rem', fontWeight: 700, color: 'var(--accent-purple)' }}>{s.total}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* Kommo Status */}
             {kommoStats && (
@@ -747,50 +880,55 @@ export default function SalesDashboardPage() {
               <button className={`${styles.shiftTab} ${shift === 'completo' ? styles.shiftActive : ''}`} onClick={() => setShift('completo')}>Dia Completo (09h-18h)</button>
             </div>
 
-            {/* Tabela vendedoras */}
+            {/* Tabela vendedoras — Kommo */}
             <div className={styles.sellersTable}>
               <div className={styles.tHead}>
                 <span></span>
-                <span>LEADS RECEB.</span>
-                <span>RESPONDIDOS</span>
-                <span>CONVERSOES</span>
+                <span>ENTRADA</span>
+                <span>INICIANTE</span>
+                <span>EM PROCESSO</span>
                 <span>VENDAS</span>
-                <span>FATURAMENTO</span>
-                <span>TAXA CONV.</span>
-                <span></span>
+                <span>SUPORTE</span>
+                <span>DESQUALIF.</span>
+                <span>TOTAL</span>
               </div>
-              {daily.map((s, i) => (
-                <div key={s.seller_id} className={styles.tRow}>
-                  <span className={styles.tSeller} onClick={() => openSellerReports(s.seller_id)} style={{ cursor: 'pointer' }} title="Ver relatorios">
-                    <span className={styles.sellerDot} style={{ background: SELLER_COLORS[i % SELLER_COLORS.length] }}>
-                      {s.name?.charAt(0)}
+              {ranking.map((s, i) => {
+                const vendas = s['VENDAS'] || 0;
+                const total = s.total || 0;
+                const convPct = total > 0 ? ((vendas / total) * 100).toFixed(1) : '0.0';
+                return (
+                  <div key={s.name} className={styles.tRow}>
+                    <span className={styles.tSeller}>
+                      <span className={styles.sellerDot} style={{ background: SELLER_COLORS[i % SELLER_COLORS.length] }}>
+                        {s.name?.charAt(0)}
+                      </span>
+                      <span className={styles.sellerNameCell}>{s.name}</span>
                     </span>
-                    <span className={styles.sellerNameCell} style={{ textDecoration: 'underline', textDecorationStyle: 'dotted', textUnderlineOffset: '3px' }}>{s.name}</span>
-                  </span>
-                  <span>{s.leads_received}</span>
-                  <span>{s.leads_responded}</span>
-                  <span>{s.conversions}</span>
-                  <span className={styles.greenCell}>{s.sales_closed}</span>
-                  <span className={styles.greenCell}>{fmt(s.revenue)}</span>
-                  <span className={styles.convCell}>
-                    <span>{s.conversion_rate}%</span>
-                    <div className={styles.miniBar}><div className={styles.miniFill} style={{ width: `${Math.min(s.conversion_rate, 100)}%`, background: s.conversion_rate >= 25 ? 'var(--accent-green)' : s.conversion_rate >= 15 ? 'var(--priority-media)' : 'var(--priority-urgente)' }} /></div>
-                  </span>
-                  <span></span>
-                </div>
-              ))}
-              {daily.length === 0 && <div className={styles.emptyRow}>Nenhum dado para esta data.</div>}
+                    <span>{s['LEAD DE ENTRADA'] || 0}</span>
+                    <span>{s['INICIANTE'] || 0}</span>
+                    <span>{s['EM PROCESSO DE VENDAS'] || 0}</span>
+                    <span className={styles.greenCell}>{vendas}</span>
+                    <span>{s['SUPORTE'] || 0}</span>
+                    <span style={{ color: 'var(--priority-urgente)' }}>{s['DESQUALIFICADOS'] || 0}</span>
+                    <span className={styles.convCell}>
+                      <span>{total}</span>
+                      <div className={styles.miniBar}><div className={styles.miniFill} style={{ width: `${Math.min(parseFloat(convPct), 100)}%`, background: parseFloat(convPct) >= 10 ? 'var(--accent-green)' : parseFloat(convPct) >= 5 ? 'var(--priority-media)' : 'var(--priority-urgente)' }} /></div>
+                    </span>
+                  </div>
+                );
+              })}
+              {ranking.length === 0 && <div className={styles.emptyRow}>Nenhum dado Kommo.</div>}
             </div>
 
-            {/* Ranking do dia */}
-            <h2 className={styles.secTitle}>Ranking do Dia</h2>
+            {/* Ranking — Vendas Kommo */}
+            <h2 className={styles.secTitle}>Ranking de Vendas (Kommo)</h2>
             <div className={styles.rankingRow}>
               {ranking.slice(0, 5).map((s, i) => (
-                <div key={s.seller_id} className={`${styles.rankCard} ${i === 0 ? styles.rank1 : i === 1 ? styles.rank2 : i === 2 ? styles.rank3 : ''}`}>
+                <div key={s.name} className={`${styles.rankCard} ${i === 0 ? styles.rank1 : i === 1 ? styles.rank2 : i === 2 ? styles.rank3 : ''}`}>
                   <div className={styles.rankPos}>{i + 1}</div>
-                  <div className={styles.rankDot} style={{ background: SELLER_COLORS[ranking.indexOf(s) % SELLER_COLORS.length] }}>{s.name?.charAt(0)}</div>
+                  <div className={styles.rankDot} style={{ background: SELLER_COLORS[i % SELLER_COLORS.length] }}>{s.name?.charAt(0)}</div>
                   <div className={styles.rankName}>{s.name}</div>
-                  <div className={styles.rankRev}>{fmt(s.revenue)}</div>
+                  <div className={styles.rankRev}>{s['VENDAS'] || 0} vendas</div>
                 </div>
               ))}
             </div>
@@ -898,22 +1036,21 @@ export default function SalesDashboardPage() {
         {page === 'ranking' && (
           <>
             <div className={styles.topBar}>
-              <h1 className={styles.pageTitle}>Ranking</h1>
-              <div className={styles.dateInput}><input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+              <h1 className={styles.pageTitle}>Ranking de Vendas (Kommo)</h1>
             </div>
             <div className={styles.rankingFull}>
               {ranking.map((s, i) => (
-                <div key={s.seller_id} className={`${styles.rankFull} ${i === 0 ? styles.rankF1 : i === 1 ? styles.rankF2 : i === 2 ? styles.rankF3 : ''}`} onClick={() => openSellerReports(s.seller_id)} style={{ cursor: 'pointer' }}>
+                <div key={s.name} className={`${styles.rankFull} ${i === 0 ? styles.rankF1 : i === 1 ? styles.rankF2 : i === 2 ? styles.rankF3 : ''}`}>
                   <div className={styles.rankFPos}>{i + 1}</div>
-                  <div className={styles.rankFDot} style={{ background: SELLER_COLORS[ranking.indexOf(s) % SELLER_COLORS.length] }}>{s.name?.charAt(0)}</div>
+                  <div className={styles.rankFDot} style={{ background: SELLER_COLORS[i % SELLER_COLORS.length] }}>{s.name?.charAt(0)}</div>
                   <div className={styles.rankFInfo}>
                     <span className={styles.rankFName}>{s.name}</span>
-                    <span className={styles.rankFMeta}>{s.sales_closed} vendas | {s.leads_received} leads | {s.conversion_rate}% conversao</span>
+                    <span className={styles.rankFMeta}>{s['VENDAS'] || 0} vendas | {s['EM PROCESSO DE VENDAS'] || 0} em processo | {s['INICIANTE'] || 0} iniciante | {s.total} total</span>
                   </div>
-                  <div className={styles.rankFRev}>{fmt(s.revenue)}</div>
+                  <div className={styles.rankFRev}>{s['VENDAS'] || 0} vendas</div>
                 </div>
               ))}
-              {ranking.length === 0 && <div className={styles.emptyRow}>Nenhum dado.</div>}
+              {ranking.length === 0 && <div className={styles.emptyRow}>Nenhum dado Kommo.</div>}
             </div>
           </>
         )}

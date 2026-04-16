@@ -4,7 +4,13 @@ import { design as designApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import DesignCardModal from '../components/DesignCardModal';
 import BgEffects from '../components/BgEffects';
-import ThemeSettings from '../components/ThemeSettings';
+import AccentPicker from '../components/AccentPicker';
+import { EXPERTS } from '../constants/experts';
+import { parseAccentValue } from '../constants/themes';
+import {
+  Film, Bell, BarChart3, Users, ClipboardList, Image as ImageIcon, Sparkles,
+  Palette, Ban, Flame, Coins, Zap, X, Link2,
+} from 'lucide-react';
 import styles from '../styles/DesignBoard.module.css';
 
 const ALL_COLUMNS = [
@@ -42,6 +48,7 @@ export default function DesignBoardPage() {
   const [bgImage, setBgImage] = useState('');
   const [showBgInput, setShowBgInput] = useState(false);
   const [bgEffect, setBgEffect] = useState('none');
+  const [accentColor, setAccentColor] = useState(null);
   const [showStylePanel, setShowStylePanel] = useState(false);
   const [showThemePanel, setShowThemePanel] = useState(false);
   const [dragCardStatus, setDragCardStatus] = useState(null);
@@ -94,6 +101,7 @@ export default function DesignBoardPage() {
       const prefs = await designApi.getPreferences();
       if (prefs.bg_image) setBgImage(prefs.bg_image);
       if (prefs.bg_effect) setBgEffect(prefs.bg_effect);
+      if (prefs.accent_color) setAccentColor(prefs.accent_color);
     } catch { /* ignore */ }
   }, [isDesignAdmin, user?.id]);
 
@@ -121,6 +129,11 @@ export default function DesignBoardPage() {
   const handleEffectChange = (effect) => {
     setBgEffect(effect);
     designApi.savePreferences({ bg_effect: effect }).catch(() => {});
+  };
+
+  const handleAccentChange = (color) => {
+    setAccentColor(color);
+    designApi.savePreferences({ accent_color: color }).catch(() => {});
   };
 
   const handleCreateDesigner = async (e) => {
@@ -264,9 +277,16 @@ export default function DesignBoardPage() {
   const formatDt = (d) => d ? new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
 
   const bgStyle = bgImage ? { backgroundImage: `url(${bgImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {};
+  const accentStyle = (() => {
+    if (!accentColor) return {};
+    const parsed = parseAccentValue(accentColor);
+    if (parsed.type === 'anime') return parsed.theme.palette;
+    return { '--accent': parsed.value };
+  })();
+  const pageStyle = { ...bgStyle, ...accentStyle };
 
   return (
-    <div className={styles.page} style={bgStyle}>
+    <div className={styles.page} style={pageStyle}>
       {bgImage && <div className={styles.bgOverlay} />}
       {/* Header */}
       <header className={styles.header}>
@@ -284,14 +304,14 @@ export default function DesignBoardPage() {
         )}
         {videoStats && (
           <button className={styles.videoStatsBtn} onClick={() => setShowVideoStats(!showVideoStats)}>
-            <span className={styles.videoIcon}>🎬</span>
+            <span className={styles.videoIcon}><Film size={16} strokeWidth={2} /></span>
             <span className={styles.videoTotal}>{videoStats.total}</span>
             <span className={styles.videoLabel}>Vídeos no Mês</span>
           </button>
         )}
         <div className={styles.headerRight}>
           <button className={styles.notifBtn} onClick={() => { setShowNotifs(!showNotifs); if (!showNotifs) loadNotifications(); }}>
-            <span>🔔</span>
+            <Bell size={16} strokeWidth={2} />
             {unreadCount > 0 && <span className={styles.notifBadge}>{unreadCount}</span>}
           </button>
           {isDesignAdmin && (
@@ -303,14 +323,14 @@ export default function DesignBoardPage() {
               <button className={styles.btnGold} onClick={() => setShowNewCard(!showNewCard)}>
                 {showNewCard ? 'Cancelar' : '+ Nova Demanda'}
               </button>
-              <button className={styles.btnGold} onClick={() => navigate('/design/analytics')}>📊 Analytics</button>
-              <button className={styles.btnGhost} onClick={() => setShowManageDesigners(!showManageDesigners)}>👥 Designers</button>
-              <button className={styles.btnGold} onClick={() => navigate('/admin-demandas')}>📋 Central Demandas</button>
+              <button className={styles.btnGhost} onClick={() => navigate('/design/analytics')}><BarChart3 size={14} strokeWidth={2.5} /> Analytics</button>
+              <button className={styles.btnGhost} onClick={() => setShowManageDesigners(!showManageDesigners)}><Users size={14} strokeWidth={2.5} /> Designers</button>
+              <button className={styles.btnGhost} onClick={() => navigate('/admin-demandas')}><ClipboardList size={14} strokeWidth={2.5} /> Central Demandas</button>
             </>
           )}
-          <button className={styles.bgBtn} onClick={() => setShowBgInput(!showBgInput)} title="Plano de fundo">🖼</button>
-          <button className={styles.bgBtn} onClick={() => setShowStylePanel(!showStylePanel)} title="Efeitos visuais">✨</button>
-          <button className={styles.bgBtn} onClick={() => setShowThemePanel(!showThemePanel)} title="Esquema de cores">🎨</button>
+          <button className={styles.bgBtn} onClick={() => setShowBgInput(!showBgInput)} title="Plano de fundo"><ImageIcon size={16} strokeWidth={2} /></button>
+          <button className={styles.bgBtn} onClick={() => setShowStylePanel(!showStylePanel)} title="Efeitos visuais"><Sparkles size={16} strokeWidth={2} /></button>
+          <button className={styles.bgBtn} onClick={() => setShowThemePanel(!showThemePanel)} title="Esquema de cores"><Palette size={16} strokeWidth={2} /></button>
           <button className={styles.avatarBtn} onClick={() => setShowProfile(!showProfile)}>
             {myAvatar ? <img src={`/uploads/${myAvatar}`} alt="" className={styles.avatarImg} /> : <span className={styles.avatarInitials}>{user?.name?.slice(0, 2).toUpperCase()}</span>}
           </button>
@@ -335,17 +355,17 @@ export default function DesignBoardPage() {
         <div className={styles.bgInputBar}>
           <span className={styles.styleLabel}>Efeito Visual:</span>
           {[
-            { key: 'none', label: 'Nenhum', icon: '🚫' },
-            { key: 'sparks', label: 'Fagulhas', icon: '🔥' },
-            { key: 'money', label: 'Dinheiro', icon: '💰' },
-            { key: 'lightning', label: 'Raios', icon: '⚡' },
+            { key: 'none', label: 'Nenhum', Icon: Ban },
+            { key: 'sparks', label: 'Fagulhas', Icon: Flame },
+            { key: 'money', label: 'Dinheiro', Icon: Coins },
+            { key: 'lightning', label: 'Raios', Icon: Zap },
           ].map(opt => (
             <button
               key={opt.key}
               className={`${styles.effectBtn} ${bgEffect === opt.key ? styles.effectBtnActive : ''}`}
               onClick={() => handleEffectChange(opt.key)}
             >
-              <span>{opt.icon}</span> {opt.label}
+              <opt.Icon size={14} strokeWidth={2} /> {opt.label}
             </button>
           ))}
         </div>
@@ -359,10 +379,10 @@ export default function DesignBoardPage() {
           padding: '1.2rem', boxShadow: 'var(--shadow-lg)', zIndex: 999,
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 700 }}>Esquema de Cores</h3>
-            <button onClick={() => setShowThemePanel(false)} style={{ background: 'transparent', color: 'var(--text-muted)', fontSize: '1.1rem' }}>&times;</button>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700 }}>Cor de Destaque</h3>
+            <button onClick={() => setShowThemePanel(false)} style={{ background: 'transparent', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}><X size={16} strokeWidth={2.5} /></button>
           </div>
-          <ThemeSettings />
+          <AccentPicker value={accentColor} onChange={handleAccentChange} />
         </div>
       )}
 
@@ -375,7 +395,7 @@ export default function DesignBoardPage() {
           <form className={styles.newCardModal} onClick={e => e.stopPropagation()} onSubmit={handleCreateCard}>
             <div className={styles.ncHeader}>
               <h2>Nova Demanda</h2>
-              <button type="button" className={styles.ncClose} onClick={() => setShowNewCard(false)}>✕</button>
+              <button type="button" className={styles.ncClose} onClick={() => setShowNewCard(false)}><X size={14} strokeWidth={2.5} /></button>
             </div>
             <div className={styles.ncBody}>
               <div className={styles.ncSection}>
@@ -384,7 +404,10 @@ export default function DesignBoardPage() {
               </div>
               <div className={styles.ncSection}>
                 <label className={styles.ncLabel}>Nome do Expert *</label>
-                <input placeholder="Nome do expert / cliente" value={newCard.expert_name} onChange={e => setNewCard(p => ({ ...p, expert_name: e.target.value }))} required />
+                <select value={newCard.expert_name} onChange={e => setNewCard(p => ({ ...p, expert_name: e.target.value }))} required>
+                  <option value="">Selecione</option>
+                  {EXPERTS.map(name => <option key={name} value={name}>{name}</option>)}
+                </select>
               </div>
               <div className={styles.ncRow}>
                 <div className={styles.ncSection}>
@@ -455,7 +478,7 @@ export default function DesignBoardPage() {
                             <div key={item._idx} className={styles.ncCheckItem}>
                               <span className={styles.ncCheckDot} />
                               <span>{item.text}</span>
-                              <button type="button" className={styles.ncCheckDel} onClick={() => ncRemoveItem(item._idx)}>✕</button>
+                              <button type="button" className={styles.ncCheckDel} onClick={() => ncRemoveItem(item._idx)}><X size={14} strokeWidth={2.5} /></button>
                             </div>
                           ))}
                         </div>
@@ -475,7 +498,7 @@ export default function DesignBoardPage() {
                         <div className={styles.ncCheckAdd}>
                           <input placeholder="Nome do setor..." value={ncNewSectionName} onChange={e => setNcNewSectionName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), ncAddSection())} />
                           <button type="button" className={styles.btnGold} onClick={ncAddSection}>Criar</button>
-                          <button type="button" className={styles.ncCheckDel} onClick={() => setNcShowNewSection(false)}>✕</button>
+                          <button type="button" className={styles.ncCheckDel} onClick={() => setNcShowNewSection(false)}><X size={14} strokeWidth={2.5} /></button>
                         </div>
                       )}
                     </div>
@@ -493,7 +516,7 @@ export default function DesignBoardPage() {
                         <div key={i} className={styles.ncFileItem}>
                           <span className={styles.ncFileName}>{f.name}</span>
                           <span className={styles.ncFileSize}>{formatSize(f.size)}</span>
-                          <button type="button" className={styles.ncCheckDel} onClick={() => ncRemoveFile(i)}>✕</button>
+                          <button type="button" className={styles.ncCheckDel} onClick={() => ncRemoveFile(i)}><X size={14} strokeWidth={2.5} /></button>
                         </div>
                       ))}
                     </div>
@@ -513,9 +536,9 @@ export default function DesignBoardPage() {
                     <div className={styles.ncLinkList}>
                       {ncLinks.map((l, i) => (
                         <div key={i} className={styles.ncLinkItem}>
-                          <span className={styles.ncLinkIcon}>🔗</span>
+                          <span className={styles.ncLinkIcon}><Link2 size={12} strokeWidth={2} /></span>
                           <span className={styles.ncLinkText}>{l.label || l.url}</span>
-                          <button type="button" className={styles.ncCheckDel} onClick={() => ncRemoveLink(i)}>✕</button>
+                          <button type="button" className={styles.ncCheckDel} onClick={() => ncRemoveLink(i)}><X size={14} strokeWidth={2.5} /></button>
                         </div>
                       ))}
                     </div>
@@ -541,7 +564,7 @@ export default function DesignBoardPage() {
         <div className={styles.profilePanel}>
           <div className={styles.managePanelHeader}>
             <h3>Meu Perfil</h3>
-            <button className={styles.logoutBtn} onClick={() => setShowProfile(false)}>✕</button>
+            <button className={styles.logoutBtn} onClick={() => setShowProfile(false)}><X size={14} strokeWidth={2.5} /></button>
           </div>
           <div className={styles.profileBody}>
             <div className={styles.profileAvatarLarge}>
@@ -580,7 +603,7 @@ export default function DesignBoardPage() {
         <div className={styles.managePanel}>
           <div className={styles.managePanelHeader}>
             <h3>Gerenciar Designers</h3>
-            <button className={styles.logoutBtn} onClick={() => setShowManageDesigners(false)}>✕</button>
+            <button className={styles.logoutBtn} onClick={() => setShowManageDesigners(false)}><X size={14} strokeWidth={2.5} /></button>
           </div>
           <form className={styles.addDesignerForm} onSubmit={handleCreateDesigner}>
             <input placeholder="Nome" value={newDesigner.name} onChange={e => setNewDesigner(p => ({ ...p, name: e.target.value }))} required />
@@ -612,6 +635,7 @@ export default function DesignBoardPage() {
           <div
             key={col.key}
             className={`${styles.column} ${dragOverCol === col.key ? styles.columnOver : ''}`}
+            style={{ '--col-accent': col.color }}
             onDragOver={e => handleDragOver(e, col.key)}
             onDragLeave={handleDragLeave}
             onDrop={e => handleDrop(e, col.key)}
@@ -680,7 +704,7 @@ export default function DesignBoardPage() {
           <div className={styles.videoDropdown}>
             <div className={styles.videoDropHeader}>
               <span>{videoStats.month}</span>
-              <button className={styles.ncClose} onClick={() => setShowVideoStats(false)}>✕</button>
+              <button className={styles.ncClose} onClick={() => setShowVideoStats(false)}><X size={14} strokeWidth={2.5} /></button>
             </div>
             <div className={styles.videoDropTotal}>
               <span className={styles.videoDropTotalVal}>{videoStats.total}</span>

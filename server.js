@@ -820,22 +820,29 @@ app.delete('/api/design/avatar', authMiddleware, roleMiddleware(...designAccess)
   } catch (err) { res.status(500).json({ error: 'Erro' }); }
 });
 
-// User visual preferences (bg_image, bg_effect)
+// User visual preferences (bg_image, bg_effect, accent_color)
 app.get('/api/design/preferences', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
   try {
-    const result = await pool.query('SELECT bg_image, bg_effect FROM users WHERE id = $1', [req.user.id]);
-    res.json(result.rows[0] || { bg_image: null, bg_effect: 'none' });
+    const result = await pool.query('SELECT bg_image, bg_effect, accent_color FROM users WHERE id = $1', [req.user.id]);
+    res.json(result.rows[0] || { bg_image: null, bg_effect: 'none', accent_color: null });
   } catch (err) { res.status(500).json({ error: 'Erro' }); }
 });
 
 app.patch('/api/design/preferences', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
   try {
-    const { bg_image, bg_effect } = req.body;
+    const { bg_image, bg_effect, accent_color } = req.body;
     const fields = [];
     const values = [];
     let idx = 1;
     if (bg_image !== undefined) { fields.push(`bg_image = $${idx++}`); values.push(bg_image || null); }
     if (bg_effect !== undefined) { fields.push(`bg_effect = $${idx++}`); values.push(bg_effect || 'none'); }
+    if (accent_color !== undefined) {
+      const valid = accent_color === null
+        || /^#[0-9a-fA-F]{6}$/.test(accent_color)
+        || /^anime:[a-z0-9]{2,16}$/.test(accent_color);
+      if (!valid) return res.status(400).json({ error: 'accent_color inválido' });
+      fields.push(`accent_color = $${idx++}`); values.push(accent_color);
+    }
     if (!fields.length) return res.status(400).json({ error: 'Nada para atualizar' });
     values.push(req.user.id);
     await pool.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${idx}`, values);
@@ -2317,51 +2324,140 @@ app.get('/api/kommo/leads-by-stage', authMiddleware, roleMiddleware(...salesAdmi
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// Categorias de etapas Kommo — ordem importa (mais especifico primeiro)
+const KOMMO_CATEGORIES = [
+  { name: 'DESQUALIFICADOS', color: '#ff8f92', patterns: ['desqualificad', 'desclassificad', 'detrator', 'reembolso', 'perdida'] },
+  { name: 'SUPORTE', color: '#eb93ff', patterns: ['suporte', 'pos venda', 'pós venda', 'retenção', 'retençâo', 'retencao', 'entregáve', 'entregave'] },
+  { name: 'EM PROCESSO DE VENDAS', color: '#87f2c0', patterns: ['processo de venda', 'rmkt', 'remarketing', 'ofereci black', 'ofereceu black', 'negociac', 'oferta feita', 'aquecendo', 'fup ', 'interesse', 'quer black', 'esperando resposta', 'planilha antig', 'comunidade', 'já chamou'] },
+  { name: 'VENDAS', color: '#00b894', patterns: ['vendas', 'vendeu black', 'venda de black', 'black code', 'aluno black', 'venda - ok', 'convertido', 'venda ganha', 'garimpo'] },
+  { name: 'INICIANTE', color: '#ffdc7f', patterns: ['iniciante', 'ftd', 'primeiro dep', 'cadastrou', 'cadastro', '1\u00b0 acesso', 'fez ftd', 'jogador'] },
+  { name: 'LEAD DE ENTRADA', color: '#c1c1c1', patterns: ['leads de entrada', 'etapa de leads', 'contato inicial', 'lead aquecido', 'chamei hoje', 'qualifica', 'primeiro contato', 'promotor'] },
+];
+
+function classifyStage(stageName) {
+  const lower = stageName.toLowerCase();
+  for (const cat of KOMMO_CATEGORIES) {
+    if (cat.patterns.some(p => lower.includes(p))) return cat.name;
+  }
+  return null;
+}
+
+// Gera WHERE clause para filtro de data/turno sobre lead_updated_at
+function kommoDateFilter(date, shift) {
+  if (!date) return { where: '', params: [], offset: 0 };
+  const params = [];
+  let where = '';
+  // Turnos: manha = 09:00-14:00, completo = 09:00-18:00, vazio = dia todo
+  if (shift === 'manha') {
+    params.push(`${date} 09:00:00`, `${date} 14:00:00`);
+    where = ` AND lc.lead_updated_at >= $P1 AND lc.lead_updated_at < $P2`;
+  } else if (shift === 'completo') {
+    params.push(`${date} 09:00:00`, `${date} 18:00:00`);
+    where = ` AND lc.lead_updated_at >= $P1 AND lc.lead_updated_at < $P2`;
+  } else {
+    params.push(`${date} 00:00:00`, `${date} 23:59:59`);
+    where = ` AND lc.lead_updated_at >= $P1 AND lc.lead_updated_at <= $P2`;
+  }
+  return { where, params };
+}
+
 // Contagem de leads agrupada por categorias fixas (dashboard cards)
 app.get('/api/kommo/leads-summary', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
   try {
-    // Categorias pedidas pela Sara — ordem importa (mais especifico primeiro)
-    const categories = [
-      { name: 'DESQUALIFICADOS', color: '#ff8f92', patterns: ['desqualificad', 'desclassificad', 'detrator', 'reembolso', 'perdida'] },
-      { name: 'SUPORTE', color: '#eb93ff', patterns: ['suporte', 'pos venda', 'pós venda', 'retenção', 'retençâo', 'retencao', 'entregáve', 'entregave'] },
-      { name: 'VENDAS', color: '#00b894', patterns: ['vendas', 'vendeu black', 'venda de black', 'black code', 'aluno black', 'venda - ok', 'convertido', 'venda ganha', 'garimpo'] },
-      { name: 'EM PROCESSO DE VENDAS', color: '#87f2c0', patterns: ['processo de venda', 'rmkt', 'remarketing', 'ofereci black', 'ofereceu black', 'negociac', 'oferta feita', 'aquecendo', 'fup ', 'interesse', 'quer black', 'esperando resposta', 'planilha antig', 'comunidade', 'já chamou'] },
-      { name: 'INICIANTE', color: '#ffdc7f', patterns: ['iniciante', 'ftd', 'primeiro dep', 'cadastrou', 'cadastro', '1\\u00b0 acesso', 'fez ftd', 'jogador'] },
-      { name: 'LEAD DE ENTRADA', color: '#c1c1c1', patterns: ['leads de entrada', 'etapa de leads', 'contato inicial', 'lead aquecido', 'chamei hoje', 'qualifica', 'primeiro contato', 'promotor'] },
-    ];
+    const { date, shift } = req.query;
+    const filter = kommoDateFilter(date, shift);
 
-    // Buscar todos os stages com contagem de leads
+    // Montar query com placeholders reais
+    let paramIdx = 1;
+    const qParams = [];
+    let whereClause = '';
+    if (filter.params.length) {
+      whereClause = ` WHERE (lc.lead_created_at >= $${paramIdx} AND lc.lead_created_at < $${paramIdx + 1})
+                      OR (lc.lead_updated_at >= $${paramIdx} AND lc.lead_updated_at < $${paramIdx + 1})`;
+      if (!date || (!shift && date)) {
+        whereClause = ` WHERE (lc.lead_created_at >= $${paramIdx} AND lc.lead_created_at <= $${paramIdx + 1})
+                        OR (lc.lead_updated_at >= $${paramIdx} AND lc.lead_updated_at <= $${paramIdx + 1})`;
+      }
+      qParams.push(...filter.params);
+      paramIdx += filter.params.length;
+    }
+
     const result = await pool.query(`
       SELECT ps.stage_name, COUNT(lc.kommo_lead_id) as lead_count
       FROM kommo_leads_cache lc
       JOIN kommo_pipeline_stages ps ON ps.status_id = lc.status_id
+      ${whereClause}
       GROUP BY ps.stage_name
-    `);
+    `, qParams);
 
-    // Classificar cada stage em uma categoria
-    const summary = categories.map(cat => ({ ...cat, lead_count: 0 }));
+    const summary = KOMMO_CATEGORIES.map(cat => ({ ...cat, lead_count: 0 }));
     let unclassified = 0;
 
     for (const row of result.rows) {
-      const name = row.stage_name.toLowerCase();
-      let matched = false;
-      for (const cat of summary) {
-        if (cat.patterns.some(p => name.includes(p))) {
-          cat.lead_count += parseInt(row.lead_count);
-          matched = true;
-          break;
-        }
+      const catName = classifyStage(row.stage_name);
+      if (catName) {
+        summary.find(c => c.name === catName).lead_count += parseInt(row.lead_count);
+      } else {
+        unclassified += parseInt(row.lead_count);
       }
-      if (!matched) unclassified += parseInt(row.lead_count);
     }
 
-    const total = await pool.query('SELECT COUNT(*) as total FROM kommo_leads_cache');
+    const totalQ = await pool.query(`SELECT COUNT(*) as total FROM kommo_leads_cache${whereClause ? ' lc' + whereClause : ''}`, qParams);
 
     res.json({
       stages: summary.map(({ patterns, ...rest }) => rest),
-      total: parseInt(total.rows[0].total),
+      total: parseInt(totalQ.rows[0].total),
       unclassified,
+      filtered: !!date,
     });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Leads por vendedora agrupados por categoria
+app.get('/api/kommo/leads-by-seller', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const { date, shift } = req.query;
+    const qParams = [];
+    let whereClause = '';
+
+    if (date) {
+      if (shift === 'manha') {
+        qParams.push(`${date} 09:00:00`, `${date} 14:00:00`);
+      } else if (shift === 'completo') {
+        qParams.push(`${date} 09:00:00`, `${date} 18:00:00`);
+      } else {
+        qParams.push(`${date} 00:00:00`, `${date} 23:59:59`);
+      }
+      // Filtrar por created_at OU updated_at para garantir que leads novos apareçam no dia
+      whereClause = ` WHERE (lc.lead_created_at >= $1 AND lc.lead_created_at ${shift ? '<' : '<='} $2) 
+                      OR (lc.lead_updated_at >= $1 AND lc.lead_updated_at ${shift ? '<' : '<='} $2)`;
+    }
+
+    const result = await pool.query(`
+      SELECT ps.stage_name, COALESCE(um.kommo_user_name, 'Não atribuído') as seller_name,
+             um.kommo_user_id, COUNT(lc.kommo_lead_id) as lead_count
+      FROM kommo_leads_cache lc
+      JOIN kommo_pipeline_stages ps ON ps.status_id = lc.status_id
+      LEFT JOIN kommo_user_map um ON um.kommo_user_id = lc.kommo_user_id
+      ${whereClause}
+      GROUP BY ps.stage_name, um.kommo_user_name, um.kommo_user_id
+    `, qParams);
+
+    const sellers = {};
+    for (const row of result.rows) {
+      const sName = row.seller_name;
+      if (!sellers[sName]) {
+        sellers[sName] = { name: sName, kommo_user_id: row.kommo_user_id, total: 0 };
+        KOMMO_CATEGORIES.forEach(c => { sellers[sName][c.name] = 0; });
+      }
+      const catName = classifyStage(row.stage_name);
+      const count = parseInt(row.lead_count);
+      if (catName) sellers[sName][catName] += count;
+      sellers[sName].total += count;
+    }
+
+    const rows = Object.values(sellers).sort((a, b) => b.total - a.total);
+    res.json({ categories: KOMMO_CATEGORIES.map(c => c.name), sellers: rows, filtered: !!date });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -2654,9 +2750,10 @@ app.post('/api/kommo/webhook', async (req, res) => {
               COALESCE(SUM(revenue) FILTER (WHERE status_id = $3), 0) AS revenue
              FROM kommo_leads_cache
              WHERE kommo_user_id = ANY($4) AND pipeline_id = $5
-               AND lead_updated_at >= $6::date AND lead_updated_at < ($6::date + interval '1 day')`,
-            [cfg.stage_new_lead || 0, cfg.stage_interested || 0, cfg.stage_won || 0, kommoUserIds, cfg.pipeline_id, today]
-          );
+               AND ((lead_created_at >= $6::date AND lead_created_at < ($6::date + interval '1 day'))
+                OR (lead_updated_at >= $6::date AND lead_updated_at < ($6::date + interval '1 day')))`,
+              [cfg.stage_new_lead || 0, cfg.stage_interested || 0, cfg.stage_won || 0, kommoUserIds, cfg.pipeline_id, today]
+            );
           const m = metricsRes.rows[0];
           await pool.query(
             `INSERT INTO sales_reports (seller_id, report_date, report_type, leads_received, leads_responded, conversions, sales_closed, revenue, notes)

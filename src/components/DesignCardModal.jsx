@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { design as designApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
+import { EXPERTS } from '../constants/experts';
+import { X, Link2, Eye, EyeOff, Image as ImageIcon, FileText, Film, Paperclip } from 'lucide-react';
 import styles from '../styles/DesignCardModal.module.css';
 
 const STATUS_LABELS = {
@@ -88,11 +90,11 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
 
   const isImage = (mime) => mime?.startsWith('image/');
   const isVideo = (mime) => mime?.startsWith('video/');
-  const getFileIcon = (mime) => {
-    if (isImage(mime)) return '🖼';
-    if (mime === 'application/pdf') return '📄';
-    if (isVideo(mime)) return '🎬';
-    return '📎';
+  const FileIcon = ({ mime, size = 22 }) => {
+    if (isImage(mime)) return <ImageIcon size={size} strokeWidth={1.8} />;
+    if (mime === 'application/pdf') return <FileText size={size} strokeWidth={1.8} />;
+    if (isVideo(mime)) return <Film size={size} strokeWidth={1.8} />;
+    return <Paperclip size={size} strokeWidth={1.8} />;
   };
 
   const formatSize = (bytes) => {
@@ -250,7 +252,7 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
             {card.visible_to_all && <span className={styles.visibleBadge}>TODOS</span>}
             <span className={styles.cardId}>#{card.id}</span>
           </div>
-          <button className={styles.closeBtn} onClick={onClose}>✕</button>
+          <button className={styles.closeBtn} onClick={onClose}><X size={14} strokeWidth={2.5} /></button>
         </div>
 
         <div className={styles.modalBody}>
@@ -271,7 +273,10 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
           ) : (
             <div className={styles.editForm}>
               <input placeholder="Titulo" value={editForm.title} onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))} />
-              <input placeholder="Expert" value={editForm.expert_name} onChange={e => setEditForm(p => ({ ...p, expert_name: e.target.value }))} />
+              <select value={editForm.expert_name} onChange={e => setEditForm(p => ({ ...p, expert_name: e.target.value }))}>
+                <option value="">Expert</option>
+                {EXPERTS.map(name => <option key={name} value={name}>{name}</option>)}
+              </select>
               <select value={editForm.delivery_type} onChange={e => setEditForm(p => ({ ...p, delivery_type: e.target.value }))}>
                 <option value="">Tipo de Entrega</option>
                 {DELIVERY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
@@ -363,7 +368,7 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
                               {canEdit && <span className={styles.dragHandle}>⠿</span>}
                               <input type="checkbox" checked={item.checked} onChange={() => handleToggleCheck(item.id)} />
                               <span className={item.checked ? styles.checkDone : ''}>{item.text}</span>
-                              {canEdit && <button className={styles.checkDel} onClick={() => handleDeleteCheck(item.id)}>✕</button>}
+                              {canEdit && <button className={styles.checkDel} onClick={() => handleDeleteCheck(item.id)}><X size={14} strokeWidth={2.5} /></button>}
                             </div>
                           );
                         })}
@@ -392,7 +397,7 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
                   <div className={styles.addCheckRow}>
                     <input placeholder="Nome do setor..." value={newSectionName} onChange={e => setNewSectionName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddSection())} />
                     <button className={styles.btnGold} onClick={handleAddSection}>Criar</button>
-                    <button className={styles.btnGhost} onClick={() => setShowNewSection(false)}>✕</button>
+                    <button className={styles.btnGhost} onClick={() => setShowNewSection(false)}><X size={14} strokeWidth={2.5} /></button>
                   </div>
                 )}
               </div>
@@ -427,7 +432,7 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
                           <video src={`/uploads/${a.filename}`} controls className={styles.attachVideo} />
                         ) : (
                           <a href={`/uploads/${a.filename}`} target="_blank" rel="noreferrer" className={styles.attachFileIcon}>
-                            <span>{getFileIcon(a.mime_type)}</span>
+                            <FileIcon mime={a.mime_type} />
                           </a>
                         )}
                         <div className={styles.attachInfo}>
@@ -435,7 +440,7 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
                           <span className={styles.attachMeta}>{formatSize(a.size)} — {a.user_name}</span>
                         </div>
                         {canEdit && (
-                          <button className={styles.attachDel} onClick={() => handleDeleteAttach(a.id)}>✕</button>
+                          <button className={styles.attachDel} onClick={() => handleDeleteAttach(a.id)}><X size={14} strokeWidth={2.5} /></button>
                         )}
                       </div>
                     );
@@ -471,14 +476,14 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
                           onDrop={e => linkDrag.onDrop(e, l)}
                         >
                           {canEdit && <span className={styles.dragHandle}>⠿</span>}
-                          <span className={styles.linkIcon}>🔗</span>
+                          <span className={styles.linkIcon}><Link2 size={14} strokeWidth={2} /></span>
                           <div className={styles.linkInfo}>
                             <a href={l.url} target="_blank" rel="noreferrer" className={styles.linkUrl}>{l.label || l.url}</a>
                             {l.label && <span className={styles.linkMeta}>{l.url}</span>}
                             <span className={styles.linkMeta}>{l.user_name}</span>
                           </div>
                           {canEdit && (
-                            <button className={styles.attachDel} onClick={() => handleDeleteLink(l.id)}>✕</button>
+                            <button className={styles.attachDel} onClick={() => handleDeleteLink(l.id)}><X size={14} strokeWidth={2.5} /></button>
                           )}
                         </div>
                       );
@@ -559,7 +564,7 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
             {/* Admin: toggle visible to all */}
             {isAdmin && (
               <button className={card.visible_to_all ? styles.btnGold : styles.btnGhost} onClick={handleToggleVisible}>
-                {card.visible_to_all ? '👁 Visível para todos' : '👁 Exibir para todo o time'}
+                {card.visible_to_all ? <><Eye size={14} strokeWidth={2.5} /> Visível para todos</> : <><EyeOff size={14} strokeWidth={2.5} /> Exibir para todo o time</>}
               </button>
             )}
             {/* Admin: move to any column */}

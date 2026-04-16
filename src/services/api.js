@@ -241,6 +241,17 @@ export const kommo = {
   sync: (date) => request('/kommo/sync', { method: 'POST', body: JSON.stringify({ date }) }),
   getSyncLogs: () => request('/kommo/sync-logs'),
   getCustomFields: () => request('/kommo/custom-fields'),
+  getStages: () => request('/kommo/stages'),
+  syncStages: () => request('/kommo/sync-stages', { method: 'POST' }),
+  getLeadsByStage: () => request('/kommo/leads-by-stage'),
+  getLeadsSummary: (params = {}) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+    return request(`/kommo/leads-summary${qs ? `?${qs}` : ''}`);
+  },
+  getLeadsBySeller: (params = {}) => {
+    const qs = new URLSearchParams(Object.entries(params).filter(([, v]) => v)).toString();
+    return request(`/kommo/leads-by-seller${qs ? `?${qs}` : ''}`);
+  },
   getWebhookStats: () => request('/kommo/webhook-stats'),
   getWebhookEvents: (limit = 50) => request(`/kommo/webhook-events?limit=${limit}`),
   getMetrics: (period = 'today') => request(`/kommo/metrics?period=${period}`),
