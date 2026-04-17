@@ -8,4 +8,6 @@ export const EXPERTS = [
   'JOAO SLOTS',
   'VANESSA',
   'WIU',
+  'KAIQUE',
+  'TIPSTER',
 ];
