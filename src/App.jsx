@@ -26,7 +26,7 @@ function AppRoutes() {
 
   return (
     <>
-      {user && <Header />}
+      {user && !isDesignUser && !isSalesUser && <Header />}
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <LoginPage />} />
         <Route path="/register" element={user ? <Navigate to="/" replace /> : <RegisterPage />} />

@@ -2430,8 +2430,7 @@ app.get('/api/kommo/leads-by-seller', authMiddleware, roleMiddleware(...salesAdm
       } else {
         qParams.push(`${date} 00:00:00`, `${date} 23:59:59`);
       }
-      // Filtrar por created_at OU updated_at para garantir que leads novos apareçam no dia
-      whereClause = ` WHERE (lc.lead_created_at >= $1 AND lc.lead_created_at ${shift ? '<' : '<='} $2) 
+      whereClause = ` WHERE (lc.lead_created_at >= $1 AND lc.lead_created_at ${shift ? '<' : '<='} $2)
                       OR (lc.lead_updated_at >= $1 AND lc.lead_updated_at ${shift ? '<' : '<='} $2)`;
     }
 
@@ -2461,6 +2460,113 @@ app.get('/api/kommo/leads-by-seller', authMiddleware, roleMiddleware(...salesAdm
     const rows = Object.values(sellers).sort((a, b) => b.total - a.total);
     res.json({ categories: KOMMO_CATEGORIES.map(c => c.name), sellers: rows, filtered: !!date });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Relatorio diario completo de um vendedor (replica o formato manual)
+// Criterio de "respondeu": lead saiu da stage de entrada (movimentacao efetiva no pipeline)
+// Criterio de "nao respondeu": lead ainda esta na stage de entrada (nenhuma acao do vendedor)
+app.get('/api/kommo/seller-daily-report', authMiddleware, roleMiddleware(...salesAdmin), async (req, res) => {
+  try {
+    const { seller_kommo_id, date, start_hour = 0, end_hour = 24 } = req.query;
+    if (!seller_kommo_id || !date) {
+      return res.status(400).json({ error: 'seller_kommo_id e date sao obrigatorios' });
+    }
+    const kommoUserId = parseInt(seller_kommo_id);
+    const startBrt = `${date} ${String(start_hour).padStart(2,'0')}:00:00`;
+    const endBrt = `${date} ${String(end_hour).padStart(2,'0')}:00:00`;
+    const toUtc = (brt) => new Date(brt + '-03:00').toISOString().replace('T',' ').substring(0,19);
+    const startUtc = toUtc(startBrt);
+    const endUtc = toUtc(endBrt);
+
+    const umRes = await pool.query('SELECT kommo_user_name, source_names FROM kommo_user_map WHERE kommo_user_id = $1', [kommoUserId]);
+    if (!umRes.rows.length) return res.status(404).json({ error: 'Vendedor nao encontrado' });
+    const { kommo_user_name, source_names } = umRes.rows[0];
+    const sources = source_names && source_names.length ? source_names : [];
+    if (!sources.length) return res.status(400).json({ error: 'Vendedor nao tem source_names configurados' });
+
+    // 1) IDs dos leads novos (unsorted_add por source mapeada)
+    const idsRes = await pool.query(
+      `SELECT DISTINCT kommo_lead_id
+       FROM kommo_unsorted_leads
+       WHERE source_name = ANY($1) AND event_action = 'add'
+         AND created_at >= $2 AND created_at < $3
+         AND kommo_lead_id IS NOT NULL`,
+      [sources, startUtc, endUtc]
+    );
+    const novosIds = idsRes.rows.map(r => r.kommo_lead_id);
+    const totalNovos = novosIds.length;
+
+    if (!totalNovos) {
+      return res.json({
+        seller: { kommo_user_id: kommoUserId, name: kommo_user_name, source_names: sources },
+        periodo: { date, start_hour: Number(start_hour), end_hour: Number(end_hour) },
+        metricas: { total_novos: 0, respondeu: 0, nao_respondeu: 0, por_stage: {}, vendas: 0, em_processo: 0 },
+        lead_ids: []
+      });
+    }
+
+    // 2) Pipeline principal + stage de entrada (infere pelo pipeline dominante dos leads)
+    const pipeRes = await pool.query(
+      `SELECT pipeline_id, COUNT(*) AS c FROM kommo_leads_cache WHERE kommo_lead_id = ANY($1) GROUP BY pipeline_id ORDER BY c DESC LIMIT 1`,
+      [novosIds]
+    );
+    const mainPipeline = pipeRes.rows[0]?.pipeline_id;
+    const entryStageRes = mainPipeline ? await pool.query(
+      `SELECT status_id FROM kommo_pipeline_stages WHERE pipeline_id = $1 ORDER BY stage_order ASC LIMIT 1`,
+      [mainPipeline]
+    ) : { rows: [] };
+    const entryStatusId = entryStageRes.rows[0]?.status_id || null;
+
+    // 3) Respondeu: lead saiu da stage de entrada OU teve transicao de status no periodo
+    const respRes = await pool.query(
+      `SELECT COUNT(DISTINCT kommo_lead_id) AS total
+       FROM kommo_leads_cache
+       WHERE kommo_lead_id = ANY($1)
+         AND (status_id != $2 OR $2 IS NULL)
+         AND pipeline_id = $3`,
+      [novosIds, entryStatusId, mainPipeline]
+    );
+    const respondeu = parseInt(respRes.rows[0].total);
+
+    // 4) Distribuicao por stage atual (cache)
+    const stageRes = await pool.query(
+      `SELECT ps.stage_name, ps.stage_order, COUNT(DISTINCT lc.kommo_lead_id) AS qtde
+       FROM kommo_leads_cache lc
+       LEFT JOIN kommo_pipeline_stages ps ON ps.status_id = lc.status_id
+       WHERE lc.kommo_lead_id = ANY($1)
+       GROUP BY ps.stage_name, ps.stage_order
+       ORDER BY ps.stage_order NULLS LAST`,
+      [novosIds]
+    );
+    const porStage = {};
+    for (const r of stageRes.rows) porStage[r.stage_name || '[outro pipeline]'] = parseInt(r.qtde);
+
+    // 5) Contadores de negocio (a partir do stage atual)
+    const vendas = porStage['VENDAS'] || 0;
+    const emProcesso = porStage['em processo de VENDAS'] || 0;
+    const iniciantes = porStage['INICIANTE'] || 0;
+    const desqualificados = porStage['DESQUALIFICADOS'] || 0;
+
+    res.json({
+      seller: { kommo_user_id: kommoUserId, name: kommo_user_name, source_names: sources },
+      periodo: { date, start_hour: Number(start_hour), end_hour: Number(end_hour), start_utc: startUtc, end_utc: endUtc },
+      pipeline: { id: mainPipeline, entry_status_id: entryStatusId },
+      metricas: {
+        total_novos: totalNovos,
+        respondeu: respondeu,
+        nao_respondeu: Math.max(0, totalNovos - respondeu),
+        iniciantes,
+        desqualificados,
+        em_processo_vendas: emProcesso,
+        vendas,
+        por_stage: porStage
+      },
+      lead_ids: novosIds
+    });
+  } catch (err) {
+    console.error('[seller-daily-report]', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Listar users do Kommo
@@ -2675,6 +2781,7 @@ app.get('/api/kommo/sync-logs', authMiddleware, roleMiddleware(...salesAdmin), a
 app.post('/api/kommo/webhook', async (req, res) => {
   res.sendStatus(200);
 
+  let eventId = null;
   try {
     const body = req.body;
     console.log('[Kommo Webhook] Body:', JSON.stringify(body).substring(0, 500));
@@ -2699,7 +2806,7 @@ app.post('/api/kommo/webhook', async (req, res) => {
       `INSERT INTO kommo_webhook_events (event_type, payload, processed) VALUES ($1, $2, false) RETURNING id`,
       [eventType, JSON.stringify(body)]
     );
-    const eventId = evRes.rows[0].id;
+    eventId = evRes.rows[0].id;
 
     // Mapeamento de users Kommo → sellers
     const userMapRes = await pool.query('SELECT kommo_user_id, seller_id FROM kommo_user_map WHERE seller_id IS NOT NULL');
@@ -2721,8 +2828,12 @@ app.post('/api/kommo/webhook', async (req, res) => {
         const statusId = parseInt(lead.status_id);
         const rawResponsible = parseInt(lead.responsible_user_id) || 0;
         const modifiedBy = parseInt(lead.modified_user_id) || 0;
-        // Usar modified_user_id como fallback quando responsible é 0
-        const responsibleId = rawResponsible || modifiedBy;
+        // Só considera fallback se o kommo_user estiver mapeado a um seller real
+        // (evita atribuir leads ao admin/sistema que dispara modified_user_id em massa)
+        let responsibleId = 0;
+        if (sellerMap[rawResponsible]) responsibleId = rawResponsible;
+        else if (sellerMap[modifiedBy]) responsibleId = modifiedBy;
+        // Caso contrário mantém 0 — ON CONFLICT preserva kommo_user_id anterior
         const price = parseFloat(lead.price || 0);
         const pipelineId = parseInt(lead.pipeline_id || cfg?.pipeline_id || 0);
 
@@ -2754,8 +2865,8 @@ app.post('/api/kommo/webhook', async (req, res) => {
              WHERE kommo_user_id = ANY($4) AND pipeline_id = $5
                AND ((lead_created_at >= $6::date AND lead_created_at < ($6::date + interval '1 day'))
                 OR (lead_updated_at >= $6::date AND lead_updated_at < ($6::date + interval '1 day')))`,
-              [cfg.stage_new_lead || 0, cfg.stage_interested || 0, cfg.stage_won || 0, kommoUserIds, cfg.pipeline_id, today]
-            );
+            [cfg.stage_new_lead || 0, cfg.stage_interested || 0, cfg.stage_won || 0, kommoUserIds, cfg.pipeline_id, today]
+          );
           const m = metricsRes.rows[0];
           await pool.query(
             `INSERT INTO sales_reports (seller_id, report_date, report_type, leads_received, leads_responded, conversions, sales_closed, revenue, notes)
@@ -2799,15 +2910,15 @@ app.post('/api/kommo/webhook', async (req, res) => {
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
           [
             item.uid || null,
-            leadData ? parseInt(leadData.id) : null,
+            leadData?.id ? parseInt(leadData.id) : (item.lead_id ? parseInt(item.lead_id) : null),
             leadData?.name || null,
-            contactData ? parseInt(contactData.id) : null,
+            contactData?.id ? parseInt(contactData.id) : null,
             contactData?.name || null,
             phone,
             sourceData.service || sourceData.site || null,
             sourceData.source_name || sourceData.from || null,
             item.category || null,
-            leadData ? parseInt(leadData.pipeline_id) : null,
+            leadData?.pipeline_id ? parseInt(leadData.pipeline_id) : (item.pipeline_id ? parseInt(item.pipeline_id) : null),
             initialMsg,
             sellerKommoId,
             action,
@@ -2914,10 +3025,12 @@ app.post('/api/kommo/webhook', async (req, res) => {
   } catch (err) {
     console.error('[Kommo Webhook Error]', err);
     // Salvar erro no último evento
-    await pool.query(
-      `UPDATE kommo_webhook_events SET error_message=$1 WHERE id = (SELECT id FROM kommo_webhook_events ORDER BY id DESC LIMIT 1)`,
-      [err.message]
-    ).catch(() => {});
+    if (eventId) {
+      await pool.query(
+        `UPDATE kommo_webhook_events SET error_message=$1 WHERE id = $2`,
+        [err.message, eventId]
+      ).catch(() => {});
+    }
   }
 });
 

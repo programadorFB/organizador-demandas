@@ -707,9 +707,6 @@ export default function SalesDashboardPage() {
           <button className={`${styles.sideNavBtn} ${page === 'aparencia' ? styles.sideNavActive : ''}`} onClick={() => setPage('aparencia')}>
             <span className={styles.navIcon}>&#9790;</span> Aparencia
           </button>
-          <button className={styles.sideNavBtn} onClick={() => navigate('/nova-demanda')}>
-            <span className={styles.navIcon}>&#43;</span> Mandar Demanda
-          </button>
           <button className={styles.sideNavBtn} onClick={() => navigate('/admin-demandas')}>
             <span className={styles.navIcon}>&#9776;</span> Central Demandas
           </button>
