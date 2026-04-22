@@ -71,7 +71,23 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(GIT_TRACE=1 git push origin main)",
       "Bash(npm i *)",
-      "Bash(npm ls *)"
+      "Bash(npm ls *)",
+      "Bash(mkdir -p /tmp/conflicts-deploy)",
+      "Read(//tmp/**)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(where psql *)",
+      "Bash(PGPASSWORD=1234 \"/c/Program Files/PostgreSQL/17/bin/psql.exe\" -h localhost -p 5432 -U postgres -lqt)",
+      "Bash(PGPASSWORD=1234 \"/c/Program Files/PostgreSQL/17/bin/psql.exe\" -h localhost -p 5432 -U postgres -d organizador_demandas -c \"\\\\dt\")",
+      "Bash(tasklist /FI \"PID eq 20220\")",
+      "Bash(powershell *)",
+      "Bash(PGPASSWORD=1234 /c/Program Files/PostgreSQL/17/bin/psql.exe *)",
+      "Bash(PGPASSWORD=1234 \"/c/Program Files/PostgreSQL/17/bin/psql.exe\" -h localhost -p 5432 -U postgres -d organizador_demandas -c \"\\\\d design_links\")",
+      "Bash(PGPASSWORD=1234 \"/c/Program Files/PostgreSQL/17/bin/psql.exe\" -h localhost -p 5432 -U postgres -d organizador_demandas -c \"\\\\d design_checklist\")",
+      "Bash(PGPASSWORD=1234 \"/c/Program Files/PostgreSQL/17/bin/psql.exe\" -h localhost -p 5432 -U postgres -d organizador_demandas -c \"\\\\dt design_*\")",
+      "Bash(PGPASSWORD=1234 \"/c/Program Files/PostgreSQL/17/bin/psql.exe\" -h localhost -p 5432 -U postgres -d organizador_demandas -c \"\\\\d users\")",
+      "Bash(PGPASSWORD=1234 \"/c/Program Files/PostgreSQL/17/bin/psql.exe\" -h localhost -p 5432 -U postgres -d organizador_demandas -c \"\\\\d design_cards\")",
+      "Read(//c/Users/programador-fb/**)",
+      "Bash(python -c ' *)"
     ]
   }
 }

@@ -133,37 +133,64 @@
 /* New Card Modal */
 .modalOverlay {
   position: fixed; inset: 0;
-  background: rgba(0,0,0,0.7);
-  backdrop-filter: blur(10px) saturate(120%);
-  -webkit-backdrop-filter: blur(10px) saturate(120%);
+  background:
+    radial-gradient(circle at 50% 0%, rgba(201,151,26,0.12), transparent 55%),
+    rgba(3,3,6,0.78);
+  backdrop-filter: blur(10px) saturate(130%);
+  -webkit-backdrop-filter: blur(10px) saturate(130%);
   display: flex; justify-content: center; align-items: flex-start; padding: 3rem 1rem;
   z-index: 300; overflow-y: auto; animation: fadeIn 0.2s var(--ease);
 }
 .newCardModal {
-  width: 100%; max-width: 580px;
-  background: linear-gradient(180deg, var(--bg-2) 0%, var(--bg-1) 100%);
-  border: 1px solid var(--line-2); border-radius: 18px;
-  box-shadow: 0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent), inset 0 1px 0 rgba(255,255,255,0.04);
-  animation: slideUp 0.3s var(--ease);
+  width: 100%; max-width: 620px;
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(201,151,26,0.10), transparent 50%),
+    linear-gradient(180deg, #18181e 0%, #0e0e13 100%);
+  border: 1px solid rgba(201,151,26,0.28);
+  border-radius: 20px;
+  box-shadow:
+    0 30px 90px rgba(0,0,0,0.85),
+    0 12px 32px rgba(0,0,0,0.55),
+    0 0 0 1px rgba(201,151,26,0.18),
+    0 0 70px -15px rgba(201,151,26,0.35),
+    inset 0 1px 0 rgba(255,255,255,0.08);
+  animation: slideUp 0.32s var(--ease);
   position: relative; overflow: hidden;
 }
 .newCardModal::before {
-  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent) 50%, transparent), transparent);
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg,
+    transparent 0%,
+    rgba(201,151,26,0.7) 30%,
+    var(--accent-hi) 50%,
+    rgba(201,151,26,0.7) 70%,
+    transparent 100%);
+  box-shadow: 0 0 20px rgba(201,151,26,0.4);
 }
 @keyframes slideUp { from { transform: translateY(24px) scale(0.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
 
 .ncHeader {
+  position: relative; z-index: 1;
   display: flex; justify-content: space-between; align-items: center;
-  padding: 1.1rem 1.4rem; border-bottom: 1px solid var(--line-1);
+  padding: 1.15rem 1.4rem 1rem;
 }
 .ncHeader h2 {
-  font-size: 1.05rem; font-weight: 800; letter-spacing: 0.02em;
+  font-size: 1.15rem; font-weight: 800; letter-spacing: 0.01em;
   background: linear-gradient(180deg, var(--accent-hi), var(--accent));
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
-.ncClose { display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--text-3); padding: 0.35rem; border-radius: 8px; cursor: pointer; transition: all 0.2s var(--ease); }
-.ncClose:hover { background: var(--bg-3); color: var(--text-1); }
+.ncClose {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  background: var(--bg-3); border: 1px solid var(--line-2);
+  color: var(--text-2); border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+}
+.ncClose:hover {
+  background: var(--bg-4); color: var(--text-1);
+  transform: rotate(90deg);
+}
 
 .ncBody { padding: 1.4rem; display: flex; flex-direction: column; gap: 1rem; }
 

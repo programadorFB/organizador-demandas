@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { design as designApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
 import { EXPERTS } from '../constants/experts';
-import { X, Link2, Eye, EyeOff, Image as ImageIcon, FileText, Film, Paperclip } from 'lucide-react';
+import { X, Link2, Eye, EyeOff, Image as ImageIcon, FileText, Film, Paperclip, Pencil, CheckSquare } from 'lucide-react';
 import styles from '../styles/DesignCardModal.module.css';
 
 const STATUS_LABELS = {
@@ -10,10 +10,17 @@ const STATUS_LABELS = {
   alteracoes: 'Alterações', concluidas: 'Concluídas', pos_gestores: 'Mandar Pós Gestores', reunioes: 'Reuniões',
 };
 
+const STATUS_COLORS = {
+  links: '#6c5ce7', demanda: '#C9971A', em_andamento: '#0984e3', analise: '#fdcb6e',
+  alteracoes: '#ff6b35', concluidas: '#00b894', pos_gestores: '#a29bfe', reunioes: '#fd79a8',
+};
+
 const DELIVERY_TYPES = ['Criativo', 'Live'];
 
-export default function DesignCardModal({ card, isAdmin, designers, onClose, onUpdate }) {
+export default function DesignCardModal({ card: cardProp, isAdmin, designers, onClose, onUpdate }) {
   const { user } = useAuth();
+  const [card, setCard] = useState(cardProp);
+  useEffect(() => { setCard(cardProp); }, [cardProp]);
   const [checklist, setChecklist] = useState([]);
   const [comments, setComments] = useState([]);
   const [history, setHistory] = useState([]);
@@ -33,6 +40,7 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
   const [newLinkLabel, setNewLinkLabel] = useState('');
   const [drag, setDrag] = useState({ type: null, item: null, over: null });
   const dragRef = useRef(null);
+  const attachInputRef = useRef(null);
 
   const loadAttachments = () => designApi.attachments(card.id).then(setAttachList).catch(() => {});
   const loadLinks = () => designApi.links(card.id).then(setLinksList).catch(() => {});
@@ -60,11 +68,15 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
     try {
       await designApi.uploadAttachments(card.id, files);
       await loadAttachments();
-    } catch (err) { console.error(err); }
+    } catch (err) {
+      console.error(err);
+      alert(`Erro ao enviar anexo: ${err.message || 'desconhecido'}`);
+    }
     finally { setUploading(false); e.target.value = ''; }
   };
 
   const handleDeleteAttach = async (id) => {
+    if (!confirm('Excluir este anexo?')) return;
     await designApi.deleteAttachment(id);
     await loadAttachments();
   };
@@ -78,6 +90,7 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
   };
 
   const handleDeleteLink = async (id) => {
+    if (!confirm('Excluir este link?')) return;
     await designApi.deleteLink(id);
     await loadLinks();
   };
@@ -123,6 +136,7 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
   };
 
   const handleDeleteCheck = async (id) => {
+    if (!confirm('Excluir este item do checklist?')) return;
     await designApi.deleteCheckItem(id);
     designApi.checklist(card.id).then(setChecklist);
   };
@@ -195,7 +209,7 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
 
   const handleApprove = () => handleMove('concluidas');
   const handleRequestChanges = () => {
-    if (!alterComment.trim()) return alert('Adicione um comentario sobre a alteracao');
+    if (!alterComment.trim()) return alert('Adicione um comentário sobre a alteração');
     handleMove('alteracoes', alterComment);
   };
   const handleStartWork = () => handleMove('em_andamento');
@@ -219,16 +233,19 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
   };
 
   const handleSaveEdit = async () => {
-    await designApi.updateCard(card.id, {
+    const updated = await designApi.updateCard(card.id, {
       ...editForm,
       designer_id: editForm.designer_id ? parseInt(editForm.designer_id) : null,
       estimated_hours: editForm.estimated_hours ? parseFloat(editForm.estimated_hours) : null,
       start_date: editForm.start_date || null,
       deadline: editForm.deadline || null,
     });
+    const designerName = updated.designer_id
+      ? designers.find(d => d.id === updated.designer_id)?.name ?? null
+      : null;
+    setCard(prev => ({ ...prev, ...updated, designer_name: designerName }));
     setEditing(false);
     onUpdate();
-    onClose();
   };
 
   const isOverdue = card.deadline && new Date(card.deadline) < new Date() && card.status !== 'concluidas';
@@ -260,41 +277,103 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
             <>
               <h2 className={styles.title}>{card.title}</h2>
               <div className={styles.infoGrid}>
-                <div className={styles.info}><span className={styles.infoLbl}>Expert</span><span>{card.expert_name}</span></div>
-                <div className={styles.info}><span className={styles.infoLbl}>Tipo</span><span>{card.delivery_type || '—'}</span></div>
-                <div className={styles.info}><span className={styles.infoLbl}>Designer</span><span>{card.designer_name || 'Nao atribuido'}</span></div>
-                <div className={styles.info}><span className={styles.infoLbl}>Inicio</span><span>{formatDt(card.start_date)}</span></div>
-                <div className={styles.info}><span className={styles.infoLbl}>Deadline</span><span className={isOverdue ? styles.overdueText : ''}>{formatDt(card.deadline)}</span></div>
-                <div className={styles.info}><span className={styles.infoLbl}>Estimativa</span><span>{card.estimated_hours ? `${card.estimated_hours}h` : '—'}</span></div>
+                <div className={styles.info}>
+                  <span className={styles.infoLbl}>Expert</span>
+                  <span className={!card.expert_name ? styles.infoEmpty : ''}>{card.expert_name || '—'}</span>
+                </div>
+                <div className={styles.info}>
+                  <span className={styles.infoLbl}>Tipo</span>
+                  <span className={!card.delivery_type ? styles.infoEmpty : ''}>{card.delivery_type || '—'}</span>
+                </div>
+                <div className={styles.info}>
+                  <span className={styles.infoLbl}>Designer</span>
+                  <span className={!card.designer_name ? styles.infoEmpty : ''}>{card.designer_name || 'Não atribuído'}</span>
+                </div>
+                <div className={styles.info}>
+                  <span className={styles.infoLbl}>Início</span>
+                  <span className={!card.start_date ? styles.infoEmpty : ''}>{formatDt(card.start_date)}</span>
+                </div>
+                <div className={styles.info}>
+                  <span className={styles.infoLbl}>Deadline</span>
+                  <span className={isOverdue ? styles.overdueText : (!card.deadline ? styles.infoEmpty : '')}>{formatDt(card.deadline)}</span>
+                </div>
+                <div className={styles.info}>
+                  <span className={styles.infoLbl}>Estimativa</span>
+                  <span className={!card.estimated_hours ? styles.infoEmpty : ''}>{card.estimated_hours ? `${card.estimated_hours}h` : '—'}</span>
+                </div>
               </div>
-              {card.description && <div className={styles.section}><h3>Descricao</h3><p className={styles.desc}>{card.description}</p></div>}
-              {isAdmin && <button className={styles.editBtn} onClick={startEdit}>Editar Card</button>}
+              {card.description && <div className={styles.section}><h3>Descrição</h3><p className={styles.desc}>{card.description}</p></div>}
+              {isAdmin && (
+                <button className={styles.editBtn} onClick={startEdit}>
+                  <Pencil size={13} strokeWidth={2.5} /> Editar Card
+                </button>
+              )}
             </>
           ) : (
             <div className={styles.editForm}>
-              <input placeholder="Titulo" value={editForm.title} onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))} />
-              <select value={editForm.expert_name} onChange={e => setEditForm(p => ({ ...p, expert_name: e.target.value }))}>
-                <option value="">Expert</option>
-                {EXPERTS.map(name => <option key={name} value={name}>{name}</option>)}
-              </select>
-              <select value={editForm.delivery_type} onChange={e => setEditForm(p => ({ ...p, delivery_type: e.target.value }))}>
-                <option value="">Tipo de Entrega</option>
-                {DELIVERY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-              </select>
-              <select value={editForm.designer_id} onChange={e => setEditForm(p => ({ ...p, designer_id: e.target.value }))}>
-                <option value="">Designer</option>
-                {designers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-              </select>
-              <select value={editForm.priority} onChange={e => setEditForm(p => ({ ...p, priority: e.target.value }))}>
-                <option value="normal">Normal</option><option value="alta">Alta</option><option value="urgente">Urgente</option>
-              </select>
-              <label className={styles.dtLabel}>Inicio<input type="datetime-local" value={editForm.start_date} onChange={e => setEditForm(p => ({ ...p, start_date: e.target.value }))} /></label>
-              <label className={styles.dtLabel}>Deadline<input type="datetime-local" value={editForm.deadline} onChange={e => setEditForm(p => ({ ...p, deadline: e.target.value }))} /></label>
-              <input type="number" step="0.5" placeholder="Horas" value={editForm.estimated_hours} onChange={e => setEditForm(p => ({ ...p, estimated_hours: e.target.value }))} />
-              <textarea placeholder="Descricao" value={editForm.description} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} rows={3} />
+              <div className={styles.editField}>
+                <label className={styles.editLabel}>Título</label>
+                <input placeholder="Título da demanda" value={editForm.title} onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))} />
+              </div>
+              <div className={styles.editField}>
+                <label className={styles.editLabel}>Expert</label>
+                <select value={editForm.expert_name} onChange={e => setEditForm(p => ({ ...p, expert_name: e.target.value }))}>
+                  <option value="">Selecione</option>
+                  {EXPERTS.map(name => <option key={name} value={name}>{name}</option>)}
+                </select>
+              </div>
+              <div className={styles.editRow}>
+                <div className={styles.editField}>
+                  <label className={styles.editLabel}>Tipo de Entrega</label>
+                  <select value={editForm.delivery_type} onChange={e => setEditForm(p => ({ ...p, delivery_type: e.target.value }))}>
+                    <option value="">Selecione</option>
+                    {DELIVERY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div className={styles.editField}>
+                  <label className={styles.editLabel}>Designer</label>
+                  <select value={editForm.designer_id} onChange={e => setEditForm(p => ({ ...p, designer_id: e.target.value }))}>
+                    <option value="">Não atribuído</option>
+                    {designers.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className={styles.editField}>
+                <label className={styles.editLabel}>Prioridade</label>
+                <div className={styles.editPriority}>
+                  {[['normal', 'Normal'], ['alta', 'Alta'], ['urgente', 'Urgente']].map(([v, l]) => (
+                    <button
+                      type="button"
+                      key={v}
+                      className={`${styles.editPriBtn} ${styles[`editPri_${v}`]} ${editForm.priority === v ? styles.editPriActive : ''}`}
+                      onClick={() => setEditForm(p => ({ ...p, priority: v }))}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className={styles.editRow}>
+                <div className={styles.editField}>
+                  <label className={styles.editLabel}>Início</label>
+                  <input type="datetime-local" value={editForm.start_date} onChange={e => setEditForm(p => ({ ...p, start_date: e.target.value }))} />
+                </div>
+                <div className={styles.editField}>
+                  <label className={styles.editLabel}>Deadline</label>
+                  <input type="datetime-local" value={editForm.deadline} onChange={e => setEditForm(p => ({ ...p, deadline: e.target.value }))} />
+                </div>
+                <div className={styles.editField}>
+                  <label className={styles.editLabel}>Horas</label>
+                  <input type="number" step="0.5" min="0" placeholder="0" value={editForm.estimated_hours} onChange={e => setEditForm(p => ({ ...p, estimated_hours: e.target.value }))} />
+                </div>
+              </div>
+              <div className={styles.editField}>
+                <label className={styles.editLabel}>Descrição</label>
+                <textarea placeholder="Detalhes, referências, observações..." value={editForm.description} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} rows={4} />
+              </div>
               <div className={styles.editActions}>
-                <button className={styles.btnGold} onClick={handleSaveEdit}>Salvar</button>
-                <button className={styles.btnGhost} onClick={() => setEditing(false)}>Cancelar</button>
+                <button type="button" className={styles.btnGhost} onClick={() => setEditing(false)}>Cancelar</button>
+                <button type="button" className={styles.btnGold} onClick={handleSaveEdit}>Salvar</button>
               </div>
             </div>
           )}
@@ -303,7 +382,7 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
           <div className={styles.tabs}>
             {['details', 'attachments', 'comments', 'history'].map(t => (
               <button key={t} className={`${styles.tab} ${tab === t ? styles.tabActive : ''}`} onClick={() => setTab(t)}>
-                {{ details: 'Checklist', attachments: `Anexos (${attachList.length})`, comments: `Comentarios (${comments.length})`, history: 'Historico' }[t]}
+                {{ details: `Checklist${checkTotal ? ` (${checkDone}/${checkTotal})` : ''}`, attachments: `Anexos (${attachList.length})`, comments: `Comentários (${comments.length})`, history: 'Histórico' }[t]}
               </button>
             ))}
           </div>
@@ -324,10 +403,15 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
 
             return (
               <div className={styles.section}>
-                {checkTotal > 0 && (
+                {checkTotal > 0 ? (
                   <div className={styles.checkProgressBar}>
                     <div className={styles.checkBarOuter}><div className={styles.checkBarInner} style={{ width: `${checkPct}%` }} /></div>
                     <span>{checkDone}/{checkTotal} ({checkPct}%)</span>
+                  </div>
+                ) : (
+                  <div className={styles.checkEmpty}>
+                    <CheckSquare size={18} strokeWidth={1.8} />
+                    <span>Nenhum item no checklist ainda. Adicione abaixo.</span>
                   </div>
                 )}
 
@@ -449,10 +533,21 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
               )}
               {attachList.length === 0 && <p className={styles.empty}>Nenhum anexo.</p>}
               <div className={styles.attachUpload}>
-                <label className={styles.uploadLabel}>
-                  <input type="file" multiple onChange={handleUploadFiles} style={{ display: 'none' }} />
-                  <span className={styles.btnGhost}>{uploading ? 'Enviando...' : '+ Adicionar Anexos'}</span>
-                </label>
+                <input
+                  ref={attachInputRef}
+                  type="file"
+                  multiple
+                  onChange={handleUploadFiles}
+                  style={{ display: 'none' }}
+                />
+                <button
+                  type="button"
+                  className={styles.btnGhost}
+                  onClick={() => attachInputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  {uploading ? 'Enviando...' : '+ Adicionar Anexos'}
+                </button>
               </div>
 
               {/* Links */}
@@ -545,35 +640,47 @@ export default function DesignCardModal({ card, isAdmin, designers, onClose, onU
             )}
             {/* Editor: Em Andamento -> Analise (concluir = enviar pra revisao) */}
             {isDesigner && isMyCard && card.status === 'em_andamento' && (
-              <button className={styles.btnApprove} onClick={handleSendReview}>Concluido</button>
+              <button className={styles.btnApprove} onClick={handleSendReview}>Concluído</button>
             )}
-            {/* Editor: Alteracoes -> Analise (corrigiu e reenvia) */}
+            {/* Editor: Alterações -> Análise (corrigiu e reenvia) */}
             {isDesigner && isMyCard && card.status === 'alteracoes' && (
-              <button className={styles.btnApprove} onClick={handleSendReview}>Concluido</button>
+              <button className={styles.btnApprove} onClick={handleSendReview}>Concluído</button>
             )}
-            {/* Admin: Analise -> Aprovar ou Pedir Alteracao */}
+            {/* Admin: Análise -> Aprovar ou Pedir Alteração */}
             {isAdmin && card.status === 'analise' && (
               <>
                 <button className={styles.btnApprove} onClick={handleApprove}>Aprovar</button>
                 <div className={styles.alterBlock}>
-                  <textarea value={alterComment} onChange={e => setAlterComment(e.target.value)} placeholder="Descreva a alteracao necessaria..." rows={2} />
-                  <button className={styles.btnAlter} onClick={handleRequestChanges}>Pedir Alteracao</button>
+                  <textarea value={alterComment} onChange={e => setAlterComment(e.target.value)} placeholder="Descreva a alteração necessária..." rows={2} />
+                  <button className={styles.btnAlter} onClick={handleRequestChanges}>Pedir Alteração</button>
                 </div>
               </>
             )}
             {/* Admin: toggle visible to all */}
             {isAdmin && (
-              <button className={card.visible_to_all ? styles.btnGold : styles.btnGhost} onClick={handleToggleVisible}>
-                {card.visible_to_all ? <><Eye size={14} strokeWidth={2.5} /> Visível para todos</> : <><EyeOff size={14} strokeWidth={2.5} /> Exibir para todo o time</>}
+              <button
+                className={`${styles.visBtn} ${card.visible_to_all ? styles.visBtnOn : ''}`}
+                onClick={handleToggleVisible}
+              >
+                {card.visible_to_all ? <Eye size={14} strokeWidth={2.5} /> : <EyeOff size={14} strokeWidth={2.5} />}
+                <span>{card.visible_to_all ? 'Visível para todo o time' : 'Exibir para todo o time'}</span>
               </button>
             )}
             {/* Admin: move to any column */}
             {isAdmin && card.status !== 'analise' && (
               <div className={styles.moveRow}>
-                <span className={styles.moveLbl}>Mover para:</span>
+                <span className={styles.moveLbl}>Mover para</span>
                 <div className={styles.moveButtons}>
                   {Object.entries(STATUS_LABELS).filter(([k]) => k !== card.status).map(([k, v]) => (
-                    <button key={k} className={styles.btnGhost} onClick={() => handleMove(k)}>{v}</button>
+                    <button
+                      key={k}
+                      className={styles.moveBtn}
+                      style={{ '--move-color': STATUS_COLORS[k] }}
+                      onClick={() => handleMove(k)}
+                    >
+                      <span className={styles.moveDot} />
+                      {v}
+                    </button>
                   ))}
                 </div>
               </div>

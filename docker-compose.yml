@@ -21,6 +21,10 @@ services:
       - ./migrations/008_chat_knowledge.sql:/docker-entrypoint-initdb.d/008_chat_knowledge.sql
       - ./migrations/009_kommo_webhook_events.sql:/docker-entrypoint-initdb.d/009_kommo_webhook_events.sql
       - ./migrations/010_seed_vendas.sql:/docker-entrypoint-initdb.d/010_seed_vendas.sql
+      - ./migrations/011_webhook_metrics.sql:/docker-entrypoint-initdb.d/011_webhook_metrics.sql
+      - ./migrations/012_pipeline_stages.sql:/docker-entrypoint-initdb.d/012_pipeline_stages.sql
+      - ./migrations/013_user_accent.sql:/docker-entrypoint-initdb.d/013_user_accent.sql
+      - ./migrations/014_design_schema_sync.sql:/docker-entrypoint-initdb.d/014_design_schema_sync.sql
     ports:
       - "5434:5432"
     healthcheck:

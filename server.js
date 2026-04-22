@@ -1,4 +1,6 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+dotenv.config({ path: '.env.local' });
+dotenv.config();
 import express from 'express';
 import pg from 'pg';
 import bcrypt from 'bcryptjs';

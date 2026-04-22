@@ -68,6 +68,7 @@ export default function DesignBoardPage() {
   const [ncNewLinkLabel, setNcNewLinkLabel] = useState('');
   const [videoStats, setVideoStats] = useState(null);
   const [showVideoStats, setShowVideoStats] = useState(false);
+  const ncFileInputRef = useRef(null);
 
   const loadCards = useCallback(async () => {
     try {
@@ -236,8 +237,10 @@ export default function DesignBoardPage() {
     setNcShowNewSection(false);
   };
   const ncAddFiles = (e) => {
-    setNcFiles(prev => [...prev, ...Array.from(e.target.files)]);
+    const newFiles = Array.from(e.target.files);
     e.target.value = '';
+    if (!newFiles.length) return;
+    setNcFiles(prev => [...prev, ...newFiles]);
   };
   const ncRemoveFile = (idx) => setNcFiles(prev => prev.filter((_, i) => i !== idx));
   const ncAddLink = () => {
@@ -521,10 +524,20 @@ export default function DesignBoardPage() {
                       ))}
                     </div>
                   )}
-                  <label className={styles.ncUploadBtn}>
-                    <input type="file" multiple onChange={ncAddFiles} style={{ display: 'none' }} />
-                    <span className={styles.btnGhost}>+ Selecionar Arquivos</span>
-                  </label>
+                  <input
+                    ref={ncFileInputRef}
+                    type="file"
+                    multiple
+                    onChange={ncAddFiles}
+                    style={{ display: 'none' }}
+                  />
+                  <button
+                    type="button"
+                    className={styles.btnGhost}
+                    onClick={() => ncFileInputRef.current?.click()}
+                  >
+                    + Selecionar Arquivos
+                  </button>
                 </div>
               </div>
 
