@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { design as designApi } from '../services/api';
 import { useAuth } from '../hooks/useAuth';
-import { EXPERTS } from '../constants/experts';
+import { EXPERTS as EXPERTS_FALLBACK } from '../constants/experts';
 import { X, Link2, Eye, EyeOff, Image as ImageIcon, FileText, Film, Paperclip, Pencil, CheckSquare } from 'lucide-react';
 import styles from '../styles/DesignCardModal.module.css';
 
@@ -17,7 +17,7 @@ const STATUS_COLORS = {
 
 const DELIVERY_TYPES = ['Criativo', 'Live'];
 
-export default function DesignCardModal({ card: cardProp, isAdmin, designers, onClose, onUpdate }) {
+export default function DesignCardModal({ card: cardProp, isAdmin, designers, experts, onClose, onUpdate }) {
   const { user } = useAuth();
   const [card, setCard] = useState(cardProp);
   useEffect(() => { setCard(cardProp); }, [cardProp]);
@@ -248,6 +248,14 @@ export default function DesignCardModal({ card: cardProp, isAdmin, designers, on
     onUpdate();
   };
 
+  const expertOptions = (experts && experts.length)
+    ? experts.filter(e => e.active !== false).map(e => e.name)
+    : EXPERTS_FALLBACK;
+  // Mantém o nome atual do card na lista mesmo se o expert foi desativado/excluído
+  const expertOptionsWithCurrent = card.expert_name && !expertOptions.includes(card.expert_name)
+    ? [card.expert_name, ...expertOptions]
+    : expertOptions;
+
   const isOverdue = card.deadline && new Date(card.deadline) < new Date() && card.status !== 'concluidas';
   const isMyCard = card.designer_id === user?.id;
   const isDesigner = user?.role === 'designer';
@@ -319,7 +327,7 @@ export default function DesignCardModal({ card: cardProp, isAdmin, designers, on
                 <label className={styles.editLabel}>Expert</label>
                 <select value={editForm.expert_name} onChange={e => setEditForm(p => ({ ...p, expert_name: e.target.value }))}>
                   <option value="">Selecione</option>
-                  {EXPERTS.map(name => <option key={name} value={name}>{name}</option>)}
+                  {expertOptionsWithCurrent.map(name => <option key={name} value={name}>{name}</option>)}
                 </select>
               </div>
               <div className={styles.editRow}>

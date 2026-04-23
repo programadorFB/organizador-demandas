@@ -5,11 +5,11 @@ import { useAuth } from '../hooks/useAuth';
 import DesignCardModal from '../components/DesignCardModal';
 import BgEffects from '../components/BgEffects';
 import AccentPicker from '../components/AccentPicker';
-import { EXPERTS } from '../constants/experts';
+import { EXPERTS as EXPERTS_FALLBACK } from '../constants/experts';
 import { parseAccentValue } from '../constants/themes';
 import {
   Film, Bell, BarChart3, Users, ClipboardList, Image as ImageIcon, Sparkles,
-  Palette, Ban, Flame, Coins, Zap, X, Link2,
+  Palette, Ban, Flame, Coins, Zap, X, Link2, UserCog, Trash2,
 } from 'lucide-react';
 import styles from '../styles/DesignBoard.module.css';
 
@@ -53,6 +53,9 @@ export default function DesignBoardPage() {
   const [showThemePanel, setShowThemePanel] = useState(false);
   const [dragCardStatus, setDragCardStatus] = useState(null);
   const [showManageDesigners, setShowManageDesigners] = useState(false);
+  const [showManageExperts, setShowManageExperts] = useState(false);
+  const [experts, setExperts] = useState([]);
+  const [newExpertName, setNewExpertName] = useState('');
   const [showProfile, setShowProfile] = useState(false);
   const [myAvatar, setMyAvatar] = useState(null);
   const [newDesigner, setNewDesigner] = useState({ name: '', email: '', password: '' });
@@ -106,8 +109,18 @@ export default function DesignBoardPage() {
     } catch { /* ignore */ }
   }, [isDesignAdmin, user?.id]);
 
+  const loadExperts = useCallback(async () => {
+    try {
+      const list = await designApi.experts(isDesignAdmin);
+      setExperts(list);
+    } catch {
+      setExperts(EXPERTS_FALLBACK.map((name, i) => ({ id: `fb-${i}`, name, active: true })));
+    }
+  }, [isDesignAdmin]);
+
   useEffect(() => { loadCards(); }, [loadCards]);
   useEffect(() => { loadMeta(); }, [loadMeta]);
+  useEffect(() => { loadExperts(); }, [loadExperts]);
   useEffect(() => { loadNotifications(); }, [loadNotifications]);
   // Poll a cada 15s
   useEffect(() => {
@@ -149,6 +162,32 @@ export default function DesignBoardPage() {
   const handleToggleDesigner = async (id) => {
     await designApi.toggleDesigner(id);
     loadMeta();
+  };
+
+  const handleCreateExpert = async (e) => {
+    e.preventDefault();
+    const name = newExpertName.trim();
+    if (!name) return;
+    try {
+      await designApi.createExpert(name);
+      setNewExpertName('');
+      loadExperts();
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleToggleExpert = async (id) => {
+    try {
+      await designApi.toggleExpert(id);
+      loadExperts();
+    } catch (err) { alert(err.message); }
+  };
+
+  const handleDeleteExpert = async (id, name) => {
+    if (!confirm(`Excluir o expert "${name}"? (só funciona se não houver demandas usando esse nome)`)) return;
+    try {
+      await designApi.deleteExpert(id);
+      loadExperts();
+    } catch (err) { alert(err.message); }
   };
 
   const grouped = {};
@@ -328,6 +367,7 @@ export default function DesignBoardPage() {
               </button>
               <button className={styles.btnGhost} onClick={() => navigate('/design/analytics')}><BarChart3 size={14} strokeWidth={2.5} /> Analytics</button>
               <button className={styles.btnGhost} onClick={() => setShowManageDesigners(!showManageDesigners)}><Users size={14} strokeWidth={2.5} /> Designers</button>
+              <button className={styles.btnGhost} onClick={() => setShowManageExperts(!showManageExperts)}><UserCog size={14} strokeWidth={2.5} /> Experts</button>
               <button className={styles.btnGhost} onClick={() => navigate('/admin-demandas')}><ClipboardList size={14} strokeWidth={2.5} /> Central Demandas</button>
             </>
           )}
@@ -409,7 +449,7 @@ export default function DesignBoardPage() {
                 <label className={styles.ncLabel}>Nome do Expert *</label>
                 <select value={newCard.expert_name} onChange={e => setNewCard(p => ({ ...p, expert_name: e.target.value }))} required>
                   <option value="">Selecione</option>
-                  {EXPERTS.map(name => <option key={name} value={name}>{name}</option>)}
+                  {experts.filter(e => e.active !== false).map(e => <option key={e.id} value={e.name}>{e.name}</option>)}
                 </select>
               </div>
               <div className={styles.ncRow}>
@@ -642,6 +682,50 @@ export default function DesignBoardPage() {
         </div>
       )}
 
+      {/* Manage Experts */}
+      {showManageExperts && isDesignAdmin && (
+        <div className={styles.managePanel}>
+          <div className={styles.managePanelHeader}>
+            <h3>Gerenciar Experts</h3>
+            <button className={styles.logoutBtn} onClick={() => setShowManageExperts(false)}><X size={14} strokeWidth={2.5} /></button>
+          </div>
+          <form className={styles.addDesignerForm} onSubmit={handleCreateExpert}>
+            <input
+              placeholder="Nome do expert (ex: NOVA EXPERT)"
+              value={newExpertName}
+              onChange={e => setNewExpertName(e.target.value.toUpperCase())}
+              maxLength={80}
+              required
+            />
+            <button type="submit" className={styles.btnGold}>+ Adicionar</button>
+          </form>
+          <div className={styles.designerList}>
+            {experts.length === 0 && <p style={{ color: 'var(--text-3)', fontSize: '0.82rem' }}>Nenhum expert cadastrado.</p>}
+            {experts.map(e => (
+              <div key={e.id} className={styles.designerRow}>
+                <span className={styles.designerDot} style={{ background: e.active === false ? '#636e72' : '#C9971A' }} />
+                <span className={styles.designerName}>{e.name}</span>
+                <span className={styles.designerEmail} />
+                <span className={styles.designerRole}>{e.active === false ? 'Inativo' : 'Ativo'}</span>
+                <button
+                  className={`${styles.toggleBtn} ${e.active === false ? styles.toggleInactive : ''}`}
+                  onClick={() => handleToggleExpert(e.id)}
+                >
+                  {e.active === false ? 'Ativar' : 'Desativar'}
+                </button>
+                <button
+                  className={styles.toggleBtn}
+                  onClick={() => handleDeleteExpert(e.id, e.name)}
+                  title="Excluir (apenas se não houver demandas usando)"
+                >
+                  <Trash2 size={12} strokeWidth={2.5} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Board */}
       <div className={styles.board} style={{ gridTemplateColumns: `repeat(${columns.length}, 1fr)` }}>
         {columns.map(col => (
@@ -705,6 +789,7 @@ export default function DesignBoardPage() {
           card={selectedCard}
           isAdmin={isDesignAdmin}
           designers={designers}
+          experts={experts}
           onClose={() => setSelectedCard(null)}
           onUpdate={() => { loadCards(); loadMeta(); }}
         />

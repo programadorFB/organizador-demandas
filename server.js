@@ -1117,6 +1117,58 @@ app.patch('/api/design/designers/:id/toggle-active', authMiddleware, roleMiddlew
   } catch (err) { res.status(500).json({ error: 'Erro' }); }
 });
 
+// ─── Experts (gerenciáveis pelo design_admin) ───
+app.get('/api/design/experts', authMiddleware, roleMiddleware(...designAccess), async (req, res) => {
+  try {
+    const includeInactive = req.query.all === '1';
+    const query = includeInactive
+      ? 'SELECT id, name, active, sort_order FROM design_experts ORDER BY sort_order, name'
+      : 'SELECT id, name, active, sort_order FROM design_experts WHERE active = true ORDER BY sort_order, name';
+    const result = await pool.query(query);
+    res.json(result.rows);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Erro ao listar experts' }); }
+});
+
+app.post('/api/design/experts', authMiddleware, roleMiddleware(...designAdmin), async (req, res) => {
+  try {
+    const name = (req.body?.name || '').trim().toUpperCase();
+    if (!name) return res.status(400).json({ error: 'Nome obrigatório' });
+    if (name.length > 80) return res.status(400).json({ error: 'Nome muito longo (máx 80)' });
+    const dup = await pool.query('SELECT id FROM design_experts WHERE name = $1', [name]);
+    if (dup.rows.length) return res.status(409).json({ error: 'Expert já cadastrado' });
+    const next = await pool.query('SELECT COALESCE(MAX(sort_order), 0) + 1 AS s FROM design_experts');
+    const result = await pool.query(
+      'INSERT INTO design_experts (name, sort_order, created_by) VALUES ($1, $2, $3) RETURNING id, name, active, sort_order',
+      [name, next.rows[0].s, req.user.id]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Erro ao criar expert' }); }
+});
+
+app.patch('/api/design/experts/:id/toggle-active', authMiddleware, roleMiddleware(...designAdmin), async (req, res) => {
+  try {
+    const result = await pool.query(
+      'UPDATE design_experts SET active = NOT active WHERE id = $1 RETURNING id, name, active, sort_order',
+      [req.params.id]
+    );
+    if (!result.rows.length) return res.status(404).json({ error: 'Expert não encontrado' });
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
+app.delete('/api/design/experts/:id', authMiddleware, roleMiddleware(...designAdmin), async (req, res) => {
+  try {
+    const used = await pool.query(
+      'SELECT 1 FROM design_cards c JOIN design_experts e ON c.expert_name = e.name WHERE e.id = $1 LIMIT 1',
+      [req.params.id]
+    );
+    if (used.rows.length) return res.status(409).json({ error: 'Expert está em uso por demandas. Desative em vez de excluir.' });
+    const result = await pool.query('DELETE FROM design_experts WHERE id = $1 RETURNING id', [req.params.id]);
+    if (!result.rows.length) return res.status(404).json({ error: 'Expert não encontrado' });
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: 'Erro' }); }
+});
+
 // Toggle visible to all
 app.patch('/api/design/cards/:id/visible', authMiddleware, roleMiddleware(...designAdmin), async (req, res) => {
   try {

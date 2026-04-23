@@ -87,7 +87,9 @@
       "Bash(PGPASSWORD=1234 \"/c/Program Files/PostgreSQL/17/bin/psql.exe\" -h localhost -p 5432 -U postgres -d organizador_demandas -c \"\\\\d users\")",
       "Bash(PGPASSWORD=1234 \"/c/Program Files/PostgreSQL/17/bin/psql.exe\" -h localhost -p 5432 -U postgres -d organizador_demandas -c \"\\\\d design_cards\")",
       "Read(//c/Users/programador-fb/**)",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(ssh-keygen -F 76.13.174.229)",
+      "Bash(ssh-keygen -R 76.13.174.229)"
     ]
   }
 }
